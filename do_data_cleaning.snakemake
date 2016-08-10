@@ -1,0 +1,177 @@
+try:
+	GENERAL_SETTINGS_INCLUDED
+except NameError: 
+	include: "general_settings.snakemake"
+
+####################
+# Config/Parameter #
+####################
+
+if CLEAN_DATA_CFG:
+	if "parameter" in CLEAN_DATA_CFG:
+		if CLEAN_DATA_CFG["parameter"] == "WGS":
+			CLEAN_DATA_CFG["parameter"]="-q 5 -a AGATCGGAAGAGC -A AGATCGGAAGAGC"
+		elif CLEAN_DATA_CFG["parameter"] == "RNAseq":
+			CLEAN_DATA_CFG["parameter"]="-q 5 -a AGATCGGAAGAGC -A AGATCGGAAGAGC"
+		elif CLEAN_DATA_CFG["parameter"] == "miRNA":
+			CLEAN_DATA_CFG["parameter"]="--trim-n -m 18 -q 10 -O 12 -n 2 --discard-untrimmed -a neb1=AGATCGGAAGAGCACACGTCT -a truseq_seqmatic_nextflex1=TGGAATTCTCGGGTGCCAAGG -a neb2=AGATCGGAAGAG -a truseq_seqmatic_nextflex2=TGGAATTCTCGG"
+		elif CLEAN_DATA_CFG["parameter"] == "damID":
+			CLEAN_DATA_CFG["parameter"]="--trim-n -m 30 -n 2 -g ^GGTCGCGGCCGAGGATC -g CGCGGCCGAGGATC -a GATCCTCGGCCGCGACC -e 0.15"	
+	else:
+		raise WorkflowError("Please specify the clean_data.parameter to be used by cutadapt either by 'WGS','RNAseq','miRNA','damID' or by providing cutadapt trim/clean parameter.")
+	if "umi_libs" in CLEAN_DATA_CFG and CLEAN_DATA_CFG["umi_libs"] and "umi_trim" not in CLEAN_DATA_CFG:
+		raise WorkflowError("Please specify UMI trim positions (read1_5,read1_3[;read2_5,read2_3])!")
+	elif "umi_trim" in CLEAN_DATA_CFG and "umi_libs" not in CLEAN_DATA_CFG:
+		CLEAN_DATA_CFG["umi_libs"] = 1
+	elif "umi_libs" not in CLEAN_DATA_CFG and "umi_trim" not in CLEAN_DATA_CFG:
+		CLEAN_DATA_CFG["umi_libs"] = 0
+		CLEAN_DATA_CFG["umi_trim"] = 0
+
+###########
+# Targets #
+###########
+
+if CLEAN_DATA_CFG:
+	CLEAN_FASTQ_FILES = expand("fastq/{f}.clean.fastq.gz",f=FASTQ_BASE)
+	CLEAN_FASTQ_REPORTS = expand("fastq/report/data/{f}.length_distribution.txt",f=LIBRARIES) + expand("fastq/report/data/{f}.cutadapt.txt",f=LIBRARIES)	
+	CLEAN_FASTQ_PLOTS = expand("fastq/report/pdf/{f}.pdf",f=["bp_removed","overview_input_reads","clean_reads_length_distribution","reads_removed_by_cause","overview_input_bp","reads_removed"])	
+	if CLEAN_DATA_CFG["umi_libs"]:
+		CLEAN_FASTQ_REPORTS = CLEAN_FASTQ_REPORTS + expand("fastq/report/data/{f}.umi.txt",f=LIBRARIES) + expand("fastq/report/data/{f}.umi.csv.gz",f=LIBRARIES)
+		CLEAN_FASTQ_PLOTS = CLEAN_FASTQ_PLOTS + expand("fastq/report/pdf/{f}.pdf",f=["umi_ranked_top_counts","umi_summary"])
+else:
+	CLEAN_FASTQ_FILES = expand("fastq/{f}.fastq.gz",f=FASTQ_BASE)
+	CLEAN_FASTQ_REPORTS = []
+	CLEAN_FASTQ_PLOTS = []
+
+
+#########
+# Rules #
+#########
+
+shell.prefix("set -euf -o pipefail;")
+
+ruleorder: record_fastq_length_distribution_paired > record_fastq_length_distribution_single
+ruleorder: record_umi_in_fastq_paired > record_umi_in_fastq_single
+ruleorder: run_cutadapt_paired > run_cutadapt_single
+
+rule do_fastq_cleaning:
+	input:
+		CLEAN_FASTQ_FILES,CLEAN_FASTQ_REPORTS,CLEAN_FASTQ_PLOTS
+
+rule summarise_data_cleaning:
+	input:
+		CLEAN_FASTQ_REPORTS
+	output:
+		CLEAN_FASTQ_PLOTS
+	log:
+		"fastq/log/summarise_data_cleaning.log"
+	shell:
+		module_load("R")+
+		"""
+		R CMD BATCH '--args fastq/report/data fastq/report/pdf' /group/sequencing/Bfx/scripts/andreasp/summarise_data_cleaning.R /dev/stderr) >& {log}
+		"""
+
+rule record_fastq_length_distribution_single:
+	input:
+		fq="fastq/{basename}_R1.clean.fastq.gz"
+	output:
+		dist="fastq/report/data/{basename}.length_distribution.txt"
+	log:
+		"fastq/log/{basename}.record_sequence_length_distribution.log"
+	shell:
+		"""
+		gunzip -cd {input.fq} | awk 'NR%4==2{{print length($0)}}' | sort -n | uniq -c | awk 'BEGIN{{OFS="\\t";print "dir","length","reads"}}{{print "R1",$2,$1}}' > {output.dist}
+		"""
+
+rule record_fastq_length_distribution_paired:
+	input:
+		fq1="fastq/{basename}_R1.clean.fastq.gz",
+		fq2="fastq/{basename}_R2.clean.fastq.gz"
+	output:
+		dist="fastq/report/data/{basename}.length_distribution.txt"
+	log:
+		"fastq/log/{basename}.record_sequence_length_distribution.log"
+	shell:
+		"""
+		gunzip -cd {input.fq1} | awk 'NR%4==2{{print length($0)}}' | sort -n | uniq -c | awk 'BEGIN{{OFS="\\t";print "dir","length","reads"}}{{print "R1",$2,$1}}' > {output.dist}
+		gunzip -cd {input.fq2} | awk 'NR%4==2{{print length($0)}}' | sort -n | uniq -c | awk 'BEGIN{{OFS="\\t";print "dir","length","reads"}}{{print "R2",$2,$1}}' >> {output.dist}
+		"""
+
+rule make_clean_fastq:
+	input:
+		"fastq/{basename}.umi.fastq.gz" if "umi_libs" in CLEAN_DATA_CFG and CLEAN_DATA_CFG["umi_libs"] else "fastq/{basename}.cutadapt.fastq.gz"
+	output:
+		"fastq/{basename}.clean.fastq.gz"
+	shell:
+		"cp {input} {output}"
+
+rule record_umi_in_fastq_single:
+	input:
+		fq="fastq/{basename}_R1.cutadapt.fastq.gz",
+		csv="fastq/report/data/{basename}.cutadapt.csv.gz"
+	output:
+		fq=temp("fastq/{basename}_R1.umi.fastq.gz"),
+		summary="fastq/report/data/{basename}.umi.txt",
+		dist="fastq/report/data/{basename}.umi.csv.gz"
+	log:
+		"fastq/log/{basename}.record_umi.log"
+	shell:
+		module_load("perl")+
+		"""
+		if [[ \"{wildcards.basename}\" =~ \"{CLEAN_DATA_CFG[umi_libs]}\" ]]; then
+		/group/sequencing/Bfx/scripts/andreasp/record_umi_from_fastq.pl --fqin1 {input.fq} --fqout1 {output.fq} --umi_distribution {output.dist} --umi_spec {CLEAN_DATA_CFG[umi_trim]} --min_len 18 > {output.summary};
+		else cp {input.fq} {output.fq};touch {output.summary} {output.dist};fi >& {log}
+		"""
+
+rule record_umi_in_fastq_paired:
+	input:
+		fq1="fastq/{basename}_R1.cutadapt.fastq.gz",
+		fq2="fastq/{basename}_R2.cutadapt.fastq.gz",
+		csv="fastq/report/data/{basename}.cutadapt.csv.gz"
+	output:
+		fq1=temp("fastq/{basename}_R1.umi.fastq.gz"),
+		fq2=temp("fastq/{basename}_R2.umi.fastq.gz"),
+		summary="fastq/report/data/{basename}.umi.txt",
+		dist="fastq/report/data/{basename}.umi.csv.gz"
+	log:
+		"fastq/log/{basename}.record_umi.log"
+	shell:
+		module_load("perl")+
+		"""
+		if [[ \"{wildcards.basename}\" =~ \"{CLEAN_DATA_CFG[umi_libs]}\" ]]; then
+		/group/sequencing/Bfx/scripts/andreasp/record_umi_from_fastq.pl --fqin1 {input.fq1} --fqin2 {input.fq2} --fqout1 {output.fq1} {output.fq2} --umi_distribution {output.dist} --umi_spec {CLEAN_DATA_CFG[umi_trim]} --min_len 18 > {output.summary};
+		else cp {input.fq1} {output.fq1}; cp {input.fq2} {output.fq2};touch {output.summary} {output.dist};fi) >& {log}
+		"""
+
+rule run_cutadapt_single:
+	input:
+		fq="fastq/{basename}_R1.fastq.gz"
+	output:
+		fq=temp("fastq/{basename}_R1.cutadapt.fastq.gz"),
+		csv=temp("fastq/report/data/{basename}.cutadapt.csv.gz"),
+		summary="fastq/report/data/{basename}.cutadapt.txt"
+	log:
+		"fastq/log/{basename}.cutadapt.log"
+	shell:
+		module_load("cutadapt")+
+		"""
+		cutadapt {CLEAN_DATA_CFG[parameter]} -o {output.fq} --info-file={output.csv} {input.fq} > {output.summary}) >& {log}
+		"""
+
+rule run_cutadapt_paired:
+	input:
+		fq1="fastq/{basename}_R1.fastq.gz",
+		fq2="fastq/{basename}_R2.fastq.gz"
+	output:
+		fq1=temp("fastq/{basename}_R1.cutadapt.fastq.gz"),
+		fq2=temp("fastq/{basename}_R2.cutadapt.fastq.gz"),
+		csv=temp("fastq/report/data/{basename}.cutadapt.csv.gz"),
+		summary="fastq/report/data/{basename}.cutadapt.txt"
+	log:
+		"fastq/log/{basename}.cutadapt.log"
+	shell:
+		module_load("cutadapt")+
+		"""
+		cutadapt {CLEAN_DATA_CFG[parameter]} -o {output.fq1} -p {output.fq2} --info-file={output.csv} {input.fq1} {input.fq2} > {output.summary}) >& {log}
+		"""
+

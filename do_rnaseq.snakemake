@@ -1,0 +1,61 @@
+try:
+	GENERAL_SETTINGS_INCLUDED
+except NameError: 
+	include: "general_settings.snakemake"
+
+include: "do_fastqc.snakemake"
+include: "do_mapping.snakemake"
+include: "do_genecounts.snakemake"
+include: "do_rnaseqc.snakemake"
+include: "do_deg_analysis.snakemake"
+
+import glob
+import os
+import re
+
+####################
+# Config/Parameter #
+####################
+
+###########
+# Targets #
+###########
+
+DOC_TARGETS = ["report/"+PROJECT+"_figure-report-config.csv","report/"+PROJECT+"_build_report.sh"]
+
+#########
+# Rules #
+#########
+
+shell.prefix("set -euf -o pipefail;")
+localrules: build_rnaseq_report_script,copy_rnaseq_figures_config
+
+rule do_rnaseq:
+	input:
+		MAPPING_TARGETS,
+		FASTQC_TARGETS,
+		RNASEQC_TARGETS,
+		GENECOUNTS_TARGETS,
+		DESEQ_TARGETS,
+		DOC_TARGETS
+
+rule build_rnaseq_report_script:
+	input:
+		"/group/sequencing/Bfx/scripts/mathias/dsp/dsp/files/figure-report-config.csv"
+	output:
+		"report/"+PROJECT+"_figure-report-config.csv",
+		"report/"+PROJECT+"_build_report.sh"
+	run:
+		from shutil import copyfile
+		copyfile(input[0],output[0])
+		with open(output[1],"w") as outstream:
+			outstream.write("#!/bin/bash\n\n")
+			outstream.write("module load apps/python\n")
+			outstream.write("export PYTHONPATH=/group/sequencing/Bfx/scripts/mathias/dsp/dsp/src:$PYTHONPATH\n\n")
+			outstream.write("/group/sequencing/Bfx/scripts/common/figures_report.py -i ../" + ALIGNER_CFG["program"] + "/report/pdf/ ../genecount/report/pdf/ ../de-analysis/pdf/ ")
+			outstream.write(" -c " + PROJECT + "_figure-report-config.csv -r . -b " + PROJECT + " -p projects/" + PROJECT + "/pdf/\n")
+			outstream.write("/group/sequencing/Bfx/scripts/common/build_report.py -r . -b " + PROJECT + " -d ../de-analysis/" + PROJECT + ".deseq-results-padj.none.csv")
+			outstream.write(" -l " + PROJECT + "_labels.csv -t projects/" + PROJECT + " -s " + SPECIES + " -e " + ANNOTATION_CFG["version"] + "\n")
+
+
+

@@ -1,0 +1,185 @@
+import time
+import glob
+import os
+import re
+import csv
+
+#############################
+# config file is now static #
+#############################
+configfile: "snakemake_config.json"
+
+###################################################
+# parameters from the snakemake config and checks #
+###################################################
+
+
+# project ################
+PROJECT =  config.get("project","")
+if not PROJECT:
+	raise WorkflowError("Please provide the project!")
+
+
+# species ################
+SPECIES = config.get("species","")
+if not SPECIES:
+	raise WorkflowError("Please provide the species!")
+
+
+# reference ################
+REFERENCE_CFG = config.get("reference",dict())
+if REFERENCE_CFG:
+	if "path" not in REFERENCE_CFG:
+		if "version" in REFERENCE_CFG:
+			REFERENCE_CFG["path"] = "/projects/seq-work/user/pipeline/reference/"+SPECIES+"/"+REFERENCE_CFG["version"]+"/"+REFERENCE_CFG["version"]
+		else:
+			raise WorkflowError("Please provide either a built-in reference via reference.version plus species OR a new reference via reference.path (full path, without .fa suffix) and reference.version!")
+	for suffix in ["fa","fa.fai","dict","genome"]:
+		if not os.path.exists(REFERENCE_CFG["path"]+"."+suffix):
+			raise WorkflowError("Could not find the reference.path file "+REFERENCE_CFG["path"]+"."+suffix+"!")
+
+
+# annotation ################
+ANNOTATION_CFG = config.get("annotation",dict())
+if ANNOTATION_CFG:
+	if "gtf" not in ANNOTATION_CFG:
+		if "version" in ANNOTATION_CFG and REFERENCE_CFG and "version" in REFERENCE_CFG:
+			ANNOTATION_CFG["gtf"] = "/projects/seq-work/user/pipeline/annotation/"+SPECIES+"/"+REFERENCE_CFG["version"]+"/EnsemblGene-"+ANNOTATION_CFG["version"]+"."+REFERENCE_CFG["version"]+".TR.gtf"
+		else:
+			raise WorkflowError("Please provide either a built-in annotation via annotation.version plus reference.version plus species OR a new annotation via annotation.gtf (full path) and annotation.version!")
+	if not os.path.exists(ANNOTATION_CFG["gtf"]):
+			raise WorkflowError("Could not find the annotation.gtf file "+ANNOTATION_CFG["gtf"]+"!")
+
+
+# aligner ################
+ALIGNER_CFG =  config.get("aligner",dict())
+if ALIGNER_CFG:
+	# program
+	if "program" not in ALIGNER_CFG or ALIGNER_CFG["program"] not in ["bwa","gsnap","bowtie1"]:
+		raise WorkflowError("Please use 'bwa', 'gsnap' or 'bowtie1' for aligner.program!")
+	# binary
+	if "binary" not in ALIGNER_CFG:
+		if ALIGNER_CFG["program"] == "bwa":
+			ALIGNER_CFG["binary"] = "bwa"
+		elif ALIGNER_CFG["program"] == "gsnap":
+			ALIGNER_CFG["binary"] = "gsnap"
+		elif ALIGNER_CFG["program"] == "bowtie1":
+			ALIGNER_CFG["binary"] = "bowtie"
+		else:
+			raise WorkflowError("Need to know the binary for alignment program "+ALIGNER_CFG["program"]+" (e.g. bowtie for bowtie1). Specify via aligner.binary!")
+	# index
+	if "index" not in ALIGNER_CFG:
+		if REFERENCE_CFG and "version" in REFERENCE_CFG:
+			ALIGNER_CFG["index"] = REFERENCE_CFG["version"]
+		else:
+			raise WorkflowError("Please provide an index via aligner.index!")
+	# index directory
+	if "index_directory" not in ALIGNER_CFG:
+		if ALIGNER_CFG["program"] == "bwa":
+			ALIGNER_CFG["index_directory"] = "/projects/seq-work/user/pipeline/bwa"
+		elif ALIGNER_CFG["program"] == "gsnap":
+			ALIGNER_CFG["index_directory"] = "/projects/seq-work/user/pipeline/gmap"
+		elif ALIGNER_CFG["program"] == "bowtie1":
+			ALIGNER_CFG["index_directory"] = "/projects/seq-work/user/pipeline/bowtie1"
+		else:
+			raise WorkflowError("Please provide an index direcory via aligner.index_directory!")
+	# parameter
+	if "parameter" not in ALIGNER_CFG:
+		if ALIGNER_CFG["program"]=="bwa":
+			ALIGNER_CFG["parameter"] = "-M"
+		elif ALIGNER_CFG["program"]=="gsnap":
+			ALIGNER_CFG["parameter"] = "--use-sarray=1 --input-buffer-size=500000 --output-buffer-size=500000 -B 5 -N 1 -n 1"
+		elif ALIGNER_CFG["program"]=="bowtie1":
+			ALIGNER_CFG["parameter"] = ""
+		else:
+			ALIGNER_CFG["parameter"] = ""
+	# splice sites
+	if "splicesites" not in ALIGNER_CFG:
+		if ALIGNER_CFG["program"]=="gsnap":
+			if REFERENCE_CFG and "version" in REFERENCE_CFG and ANNOTATION_CFG and "version" in ANNOTATION_CFG:
+				ALIGNER_CFG["splicesites"] = "EnsemblGene-"+ANNOTATION_CFG["version"]+".ss." + REFERENCE_CFG["version"]+".iit"
+	if "splicesites" in ALIGNER_CFG:
+		if ALIGNER_CFG["program"]=="gsnap":
+			ALIGNER_CFG["parameter"] = ALIGNER_CFG["parameter"] + " -s " + ALIGNER_CFG["splicesites"]
+	# version
+	if "version" not in ALIGNER_CFG:
+		ALIGNER_CFG["version"] = ""
+	# checks
+	if ALIGNER_CFG["program"]=="gsnap":
+		if not os.path.exists(ALIGNER_CFG["index_directory"]+"/"+ALIGNER_CFG["index"]):
+			raise WorkflowError("Could not find the GSNAP index for "+ALIGNER_CFG["index"]+" (aligner.index) in "+ALIGNER_CFG["index_directory"]+" (aligner.index_directory)!")
+		if "splicesites" in ALIGNER_CFG and not (os.path.exists(ALIGNER_CFG["index_directory"]+"/"+ALIGNER_CFG["index"]+"/"+ALIGNER_CFG["index"]+".maps/"+ALIGNER_CFG["splicesites"]) or os.path.exists(ALIGNER_CFG["splicesites"])):
+			raise WorkflowError("Could not find the GSNAP splice site files for "+ALIGNER_CFG["index_directory"]+" specified via aligner.splicesites")
+	if ALIGNER_CFG["program"]=="bwa":
+		if not os.path.exists(ALIGNER_CFG["index_directory"]+"/"+ALIGNER_CFG["index"]+".bwt"):
+			raise WorkflowError("Could not find the BWA index files  for "+ALIGNER_CFG["index"]+" (aligner.index) in "+ALIGNER_CFG["index_directory"]+" (aligner.index_directory)!")
+	if ALIGNER_CFG["program"]=="bowtie1":
+		if not os.path.exists(ALIGNER_CFG["index_directory"]+"/"+ALIGNER_CFG["index"]+".1.ebwt"):
+			raise WorkflowError("Could not find the BWA index files  for "+ALIGNER_CFG["index"]+" (aligner.index) in "+ALIGNER_CFG["index_directory"]+" (aligner.index_directory)!")
+
+
+# strand ################
+STRAND = int(config.get("strand",0))
+
+if STRAND!=0 and STRAND!=1 and STRAND!=2:
+	raise WorkflowError("The parameter 'strand' must be: 0 - both strands, 1 - plus strand or 2 - minus strand!")
+
+
+# clean data ############
+CLEAN_DATA_CFG = config.get("clean_data",dict())
+
+
+##############################
+# names, basenames and files #
+##############################
+
+
+# input (fastq, fastq basename, libraries)
+INPUT_CFG = config.get("input",dict())
+
+if "fastq" not in INPUT_CFG:
+	INPUT_CFG["fastq"] = [os.path.basename(f) for f in glob.glob("fastq/*.fastq.gz")]
+if not INPUT_CFG["fastq"]:
+	raise WorkflowError("Could not find FASTQ files in the 'fastq' directory!")
+
+INPUT_CFG["fastq_base"] = [re.sub('\.fastq.gz','',f) for f in INPUT_CFG["fastq"]]
+INPUT_CFG["fastq_base"] = sorted(set([re.sub('\.\S+$','',f) for f in INPUT_CFG["fastq_base"]]))
+if not INPUT_CFG["fastq_base"]:
+	raise WorkflowError("Could not find valid FASTQ files in the 'fastq' directory!")
+
+if "libraries" not in INPUT_CFG: 
+	INPUT_CFG["libraries"] = sorted(set([re.sub('(_R\d)$','',os.path.basename(f)) for f in INPUT_CFG["fastq_base"]]))
+if not INPUT_CFG["libraries"]:
+	raise WorkflowError("Could not get library/sample names from the FASTQ files in the 'fastq' directory!")
+
+FASTQ_BASE = INPUT_CFG["fastq_base"]
+LIBRARIES = INPUT_CFG["libraries"]
+
+#############
+# functions #
+#############
+
+# function that loads specific versions of programs
+def module_load(*modules):
+	PROGRAM_CFG = config.get("programs",dict())
+	module_str = "\n\t\t(module load"
+	for m in list(modules):
+		module_str += " apps/"+m
+		if m in PROGRAM_CFG:
+			module_str += "/"+PROGRAM_CFG[m]
+	module_str = module_str + ";module list -l"
+	return module_str
+			
+
+#########
+# other #
+#########
+
+# tmp dir to use
+TMP_DIR="${TMPDIR:-.}"
+#TMP_DIR="/tmp"
+
+# this variable prevents that this file is included multiple times
+GENERAL_SETTINGS_INCLUDED = 1
+
+

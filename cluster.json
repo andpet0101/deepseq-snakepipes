@@ -1,0 +1,176 @@
+{
+	"__default__" :
+	{
+		"shell" : "/bin/bash",
+		"queue" : "ngs.q",
+		"runtime" : "08:00:00",
+		"memory" : "2G",
+		"cpu" : "2",
+		"other_resources" : "\"\""
+	},
+	"run_gsnap_single" :
+	{
+		"runtime" : "48:00:00",
+		"memory" : "40G",
+		"cpu" : "8-10",
+		"other_resources" : "sse42"
+	},
+	"run_gsnap_paired" :
+	{
+		"runtime" : "48:00:00",
+		"memory" : "40G",
+		"cpu" : "8-12",
+		"other_resources" : "sse42"
+	},
+	"run_bwa_single" :
+	{
+		"runtime" : "48:00:00",
+		"memory" : "40G",
+		"cpu" : "8-10"
+	},
+	"run_bwa_paired" :
+	{
+		"runtime" : "48:00:00",
+		"memory" : "40G",
+		"cpu" : "8-12"
+	},
+	"run_rnaseqc" :
+	{
+		"runtime" : "168:00:00",
+		"memory" : "40G"	
+	},
+	"run_featureCounts" :
+	{
+		"cpu" : "8"	
+	},
+	"run_miTCR" :
+	{
+		"cpu" : "4",
+		"memory" : "4G"
+	},
+	"run_filter_rRNA" :
+	{
+		"cpu" : "8"	
+	},
+	"run_filter_tRNA" :
+	{
+		"cpu" : "8"	
+	},
+	"run_filter_other_ncRNA" :
+	{
+		"cpu" : "8"	
+	},
+	"run_mirdeep_mapper" :
+	{
+		"cpu" : "8"	
+	},
+	"Baslan_simulate_reads_from_genome" :
+	{
+		"runtime" : "96:00:00"	
+	},
+	"Baslan_remap_simulated_reads" :
+	{
+		"runtime" : "96:00:00",
+		"memory" : "30G",
+		"cpu" : "8-10"
+	},
+	"run_MarkDuplicates" :
+	{
+		"memory" : "8G"	
+	},
+	"run_GATK_SplitNCigarReads" :
+	{
+		"memory" : "8G"	
+	},
+	"run_GATK_RealignerTargetCreator_wgs" :
+	{
+		"runtime" : "96:00:00",
+		"memory" : "8G"	
+	},
+	"run_GATK_RealignerTargetCreator_rnaseq" :
+	{
+		"runtime" : "96:00:00",
+		"memory" : "8G"	
+	},
+	"run_GATK_IndelRealigner" :
+	{
+		"runtime" : "96:00:00",
+		"memory" : "12G"	
+	},
+	"run_GATK_BaseRecalibrator" :
+	{
+		"runtime" : "96:00:00",
+		"memory" : "8G"	
+	},
+	"run_GATK_BaseRecalibrator_PrintReads" :
+	{
+		"runtime" : "96:00:00",
+		"memory" : "12G"	
+	},
+	"run_GATK_HaplotypeCaller_wgs" :
+	{
+		"cpu" : "8",
+		"runtime" : "96:00:00",
+		"memory" : "60G"	
+	},
+	"run_GATK_CombineGVCF" :
+	{
+		"runtime" : "96:00:00",
+		"memory" : "8G"	
+	},
+	"run_GATK_GenotypeGVCFs" :
+	{
+		"runtime" : "96:00:00",
+		"memory" : "16G"	
+	},
+	"run_GATK_HaplotypeCaller_rnaseq" :
+	{
+		"cpu" : "8",
+		"runtime" : "96:00:00",
+		"memory" : "60G"	
+	},	
+	"run_GATK_VariantRecalibrator_snp" :
+	{
+		"runtime" : "96:00:00",
+		"memory" : "12G"	
+	},
+	"run_GATK_ApplyRecalibration_snp" :
+	{
+		"runtime" : "96:00:00"
+	},	
+	"run_GATK_VariantRecalibrator_indels" :
+	{
+		"runtime" : "96:00:00",
+		"memory" : "12G"	
+	},
+	"run_GATK_ApplyRecalibration_indels" :
+	{
+		"runtime" : "96:00:00"
+	},
+	"run_GATK_VariantAnnotator_dbsnp" :
+	{
+		"runtime" : "96:00:00",
+		"memory" : "2G"	
+	},
+	"run_VariantEffectPredictor" :
+	{
+		"runtime" : "96:00:00",
+		"memory" : "24G",
+		"cpu" : "10-16"
+	},
+	"cnvnator_extract_reads" :
+	{
+		"runtime" : "96:00:00"
+	},
+	"delly_call_struct_vars" :
+	{
+		"runtime" : "96:00:00",
+		"memory" : "16G"	
+	},
+	"run_mirdeep_star" :
+	{
+		"runtime" : "96:00:00",
+		"memory" : "16G"	
+	}
+}
+

@@ -1,0 +1,97 @@
+try:
+	GENERAL_SETTINGS_INCLUDED
+except NameError: 
+	include: "general_settings.snakemake"
+
+####################
+# Config/Parameter #
+####################
+
+BAM_FILES = [ALIGNER_CFG["program"] + "/" + s + ".bam" for s in LIBRARIES]
+BAI_FILES = [ALIGNER_CFG["program"] + "/" + s + ".bam.bai" for s in LIBRARIES]
+
+LIBCOMPLEXITY_CFG = config.get("libcomplexity",dict())
+LIBCOMPLEXITY_CFG["subsample_size"] = LIBCOMPLEXITY_CFG["subsample_size"] if "subsample_size" in LIBCOMPLEXITY_CFG else 1000000
+if "gene_relation_txt" not in LIBCOMPLEXITY_CFG:
+	if "version" in ANNOTATION_CFG and "version" in REFERENCE_CFG:
+		LIBCOMPLEXITY_CFG["gene_relation_txt"] = "/projects/seq-work/user/pipeline/libcomplexity/EnsemblGene-"+ANNOTATION_CFG["version"]+"."+REFERENCE_CFG["version"]+".TR.gene-relation.txt"
+	else:
+		raise WorkflowError("Cannot determine the libcomplexity.gene_relation_txt with reference.version and annotation.version!")
+if not os.path.exists(LIBCOMPLEXITY_CFG["gene_relation_txt"]):
+	raise WorkflowError("Could not find "+LIBCOMPLEXITY_CFG["gene_relation_txt"]+"!")
+
+###########
+# Targets #
+###########
+
+FEATURECOUNTS_TABLE = "genecount/" + PROJECT + "." + REFERENCE_CFG["version"] + ".e" + ANNOTATION_CFG["version"] + ".txt"
+FEATURECOUNTS_SUMMARY ="genecount/" + PROJECT + "." + REFERENCE_CFG["version"] + ".e" + ANNOTATION_CFG["version"] + ".txt.summary"
+FEATURECOUNTS_OUT = "genecount/" + PROJECT + "." + REFERENCE_CFG["version"] + ".e" + ANNOTATION_CFG["version"] + ".out"
+FEATURECOUNTS_STATS = ["report/data/" + PROJECT + "_featureCounts_stats.csv","report/" + PROJECT + "_featureCounts_stats.tex"]
+FEATURECOUNTS_COMPLEXITY = ["genecount/report/data/" + PROJECT + "_featureCounts_complexity.csv","genecount/report/pdf/" + PROJECT + "_featureCounts_isoformcomplexity_complete_1.Genes.pdf","genecount/report/pdf/" + PROJECT + "_featureCounts_isoformcomplexity_added_1.Genes.pdf","genecount/report/png/" + PROJECT + "_featureCounts_isoformcomplexity_complete_1.Genes.png","genecount/report/png/" + PROJECT + "_featureCounts_isoformcomplexity_added_1.Genes.png"]
+GENECOUNTS_TARGETS = [FEATURECOUNTS_TABLE,FEATURECOUNTS_SUMMARY,FEATURECOUNTS_OUT,FEATURECOUNTS_STATS,FEATURECOUNTS_COMPLEXITY]
+
+
+#########
+# Rules #
+#########
+
+shell.prefix("set -euf -o pipefail;")
+localrules: extract_featureCounts_stats
+
+rule do_genecounts:
+	input:
+		GENECOUNTS_TARGETS
+
+rule calculate_featureCounts_isoformcomplexity:
+	input:
+		table=FEATURECOUNTS_TABLE,
+		summary=FEATURECOUNTS_SUMMARY
+	output:
+		FEATURECOUNTS_COMPLEXITY
+	log:
+		"genecount/log/calculate_featureCounts_isoformcomplexity.log"
+	shell:
+		module_load("python")+
+		"""
+		export PYTHONPATH=/group/sequencing/Bfx/scripts/mathias/dsp/dsp/src:$PYTHONPATH
+		/group/sequencing/Bfx/scripts/common/calculate_isoformcomplexity.py -f {input.table} -s {input.summary} -r {LIBCOMPLEXITY_CFG[gene_relation_txt]} -b {PROJECT} -i {LIBCOMPLEXITY_CFG[subsample_size]} -o genecount/report -c Genes) >& {log}
+		"""
+
+rule extract_featureCounts_stats:
+	input:
+		FEATURECOUNTS_SUMMARY
+	output:
+		FEATURECOUNTS_STATS
+	log:
+		"genecount/log/extract_featureCounts_stats.log"
+	shell:
+		module_load("python")+
+		"""
+		export PYTHONPATH=/group/sequencing/Bfx/scripts/mathias/dsp/dsp/src:$PYTHONPATH
+		/group/sequencing/Bfx/scripts/common/extract_featurecounts.py  -f {input} -b {PROJECT} -r report) >& {log}
+		"""
+
+rule run_featureCounts:
+	input:
+		bams=BAM_FILES,
+		bais=BAI_FILES
+	output:
+		table=FEATURECOUNTS_TABLE,
+		out=FEATURECOUNTS_OUT,
+		summary=FEATURECOUNTS_SUMMARY
+	log:
+		"genecount/log/run_featureCounts.log"
+	threads:
+		8
+	shell:
+		module_load("subread","samtools")+
+		"""
+		[ $(samtools view -f 1 -c {input.bams[0]}) -eq 0 ] && PARAM=\"\" || PARAM=\" -p -C \"		
+		featureCounts -a {ANNOTATION_CFG[gtf]} -s {STRAND} $PARAM -o {output.table} --primary -Q 1 -T ${{NSLOTS:-{threads}}} {input.bams}) >& {log}
+		cp {log} {output.out}		
+		sed -i.original -e '2s/{ALIGNER_CFG[program]}\/L[0-9]\+_//g;  2s/\.bam//g' {output.table}
+		sed -i.original -e 's/{ALIGNER_CFG[program]}\/L[0-9]\+_//g; s/\.bam//g' {output.summary}
+		"""
+
+

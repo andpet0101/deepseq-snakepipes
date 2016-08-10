@@ -1,0 +1,194 @@
+try:
+	GENERAL_SETTINGS_INCLUDED
+except NameError: 
+	include: "general_settings.snakemake"
+
+
+####################
+# Config/Parameter #
+####################
+
+###########
+# Targets #
+###########
+
+
+#########
+# Rules #
+#########
+
+shell.prefix("set -euf -o pipefail;")
+
+
+rule do_analyse_miRNA:
+	input:
+		expand("miRNA/{f}_R1.wo_rRNA_tRNA.fastq.gz",f=LIBRARIES),
+		expand("miRNA/{f}_R1.wo_rRNA.fastq.gz",f=LIBRARIES),
+		expand("miRNA/{f}_R1.filtered.fastq.gz",f=LIBRARIES),
+		expand("miRNA/{f}.filtered.bam",f=LIBRARIES),
+		expand("miRNA/{f}.unfiltered.bam",f=LIBRARIES),
+		expand("miRNA/{f}.mirdeep_star_data.csv.gz",f=LIBRARIES),
+		expand("miRNA/{f}.mirdeep_star.csv",f=LIBRARIES)
+
+### analyse/plot results with R ###
+
+
+
+### map to genome and analyse miRNA with mirdeep  ###
+rule parse_mirdeep_star_results:
+	input:
+		"miRNA/{basename}.mirdeep_star_data.csv.gz"
+	output:
+		out="miRNA/{basename}.mirdeep_star.csv",
+		report="miRNA/report/data/{basename}.mirdeep_star.csv"
+	log:
+		"miRNA/log/{basename}.parse_mirdeep_star_results.log"
+	shell:
+		"""
+		gunzip -cd {input} | /group/sequencing/Bfx/scripts/andreasp/parse_mirdeep_star_result.pl > {output.out}
+		cp {output.out} {output.report}
+		"""
+
+rule run_mirdeep_star:
+	input:
+		bam="miRNA/{basename}.filtered.bam",
+		genome_dir="genome",
+		targetscan_dir="targetScan"
+	output:
+		all="miRNA/{basename}.mirdeep_star_data.csv.gz"
+	log:
+		"miRNA/log/{basename}.run_mirdeep_star.log"
+	shell:
+		"""
+		(java -Xmx16G -jar /projects/seq-work/analysis/illudev/bfx504/mirdeep_star/MD.jar -g {REFERENCE_CFG[version]} {input.bam}) >& {log}
+		gzip -c miRNA/{wildcards.basename}.filtered.result > {output.all}
+		rm  miRNA/{wildcards.basename}.filtered.cluster miRNA/{wildcards.basename}.filtered.known_miR.result miRNA/{wildcards.basename}.filtered.result miRNA/{wildcards.basename}.filtered.sorted.bam
+		"""
+
+rule link_mirdeep_star_directories:
+	output:
+		genome_dir=temp("genome"),
+		targetscan_dir=temp("targetScan")
+	shell:
+		"""
+		ln -s /projects/seq-work/analysis/illudev/bfx504/mirdeep_star/genome
+		ln -s /projects/seq-work/analysis/illudev/bfx504/mirdeep_star/targetScan
+		"""
+
+rule map_filtered_miRNA_fastq_on_genome:
+	input:
+		fq="miRNA/{basename}_R1.filtered.fastq.gz"
+	output:
+		bam="miRNA/{basename}.filtered.bam",
+		bai="miRNA/{basename}.filtered.bam.bai",
+		summary="miRNA/report/data/{basename}.filtered_mapping.txt"
+	log:
+		"miRNA/log/{basename}.map_filtered_miRNA_fastq_on_genome.log"
+	threads:
+		8
+	shell:
+		module_load("bowtie","samtools")+
+		"""
+		RG="{wildcards.basename}";LB="{wildcards.basename}";SM="{wildcards.basename}"
+		if [[ "{wildcards.basename}" =~ ^(L[0-9]+)_(.+) ]];then LB="${{BASH_REMATCH[1]}}";SM="${{BASH_REMATCH[2]}}";fi
+		gunzip -cd {input.fq} | bowtie -l 15 -v 2 -e 999 --nomaqround --best --strata -a -m 100 --chunkmbs 256 -p ${{NSLOTS:-{threads}}} -S --sam-RG ID:$RG --sam-RG LB:$LB --sam-RG SM:$SM {ALIGNER_CFG[index_directory]}/{ALIGNER_CFG[index]} - | \
+		samtools sort -O bam -T ${{TMPDIR:-.}}/{wildcards.basename} -o {output.bam} -@ 2 -
+		samtools index {output.bam}) >& {log}
+		cp {log} {output.summary}
+		"""
+
+
+### filter miRNA fastq data (remove tRNA, rRNA, ncRNA and mRNA) ###
+rule filter_otherRNA_from_miRNA_fastq:
+	input:
+		fq="miRNA/{basename}_R1.wo_rRNA_tRNA.fastq.gz",
+		bed="miRNA/otherRNA_genomic_filter.bed"
+	output:
+		fq="miRNA/{basename}_R1.filtered.fastq.gz",
+		bam=temp("miRNA/{basename}.wo_rRNA_tRNA.bam"),
+		summary="miRNA/report/data/{basename}.otherRNA.txt",
+		clean="miRNA/report/data/{basename}.miRNA_data.txt"
+	log:
+		"miRNA/log/{basename}.filter_otherRNA_from_miRNA_fastq.log"
+	threads:
+		8
+	shell:
+		module_load("bowtie","samtools","bedtools")+
+		"""
+		gunzip -cd {input.fq} | bowtie -l 15 -n 0 -e 999 --nomaqround --best --strata -a -m 1 --chunkmbs 256 -p ${{NSLOTS:-{threads}}} -S {ALIGNER_CFG[index_directory]}/{ALIGNER_CFG[index]} - | samtools sort -O bam -T ${{TMPDIR:-.}}/{wildcards.basename} -o {output.bam} -@ 2 -
+		bedtools intersect -a {output.bam} -b {input.bed} -s -v -sorted -g {REFERENCE_CFG[path]}.genome | bedtools bamtofastq -i stdin -fq /dev/stdout | gzip -c > {output.fq}
+		bedtools intersect -a {output.bam} -b {input.bed} -s -wa -wb -bed -sorted -g {REFERENCE_CFG[path]}.genome | awk '{{OFS="\t";print $4,$3-$2,$16}}' | \
+		sort -k 1,1 | bedtools groupby -g 1,2 -c 3 -o first | awk '{{print $3,$2}}' | sort -k 1,1 -k 2,2n | uniq -c | awk 'BEGIN{{OFS="\\t";print "type","length","count"}}{{print $2,$3,$1}}' > {output.summary}
+		gunzip -cd {output.fq} | awk 'NR%4==2{{print length($0)}}' | sort -n | uniq -c | awk 'BEGIN{{OFS="\\t";print "type","length","count"}}{{print "clean",$2,$1}}' > {output.clean}) >& {log}
+		"""	
+
+rule create_otherRNA_genomic_filter_bed:
+	output:
+		"miRNA/otherRNA_genomic_filter.bed"
+	log:
+		"miRNA/log/create_otherRNA_genomic_filter_bed.log"
+	shell:
+		module_load("bedtools","cufflinks")+
+		"""
+		cat {ANNOTATION_CFG[gtf]} | egrep 'gene_biotype "(Mt_rRNA|Mt_tRNA|rRNA|scaRNA|snoRNA|snRNA|sRNA|protein_coding)"' | \
+		gffread -o- -F - | perl -pe 's/[^\\t]+;gene_biotype=([^;]+);[^\\t\\n]+/$1/' | awk '$3=="transcript"{{OFS="\\t";print $1,$4,$5,$9,$6,$7}}' | bedtools merge -c 4,5,6 -o first,first,first | \
+		bedtools sort -i stdin -faidx {REFERENCE_CFG[path]}.genome > {output}) >& {log}
+		"""
+
+rule filter_tRNA_from_miRNA_fastq:
+	input:
+		"miRNA/{basename}_R1.wo_rRNA.fastq.gz"
+	output:
+		fq=temp("miRNA/{basename}_R1.wo_rRNA_tRNA.fastq.gz"),
+		summary="miRNA/report/data/{basename}.tRNA.txt"
+	log:
+		"miRNA/log/{basename}.filter_tRNA_from_miRNA_fastq.log"
+	threads:
+		8
+	shell:
+		module_load("bowtie")+
+		"""		
+		gunzip -cd {input} | bowtie -l 15 -n 0 --nomaqround -p ${{NSLOTS:-{threads}}} -k 1 -S --sam-nohead --un=miRNA/{wildcards.basename}_R1.wo_rRNA_tRNA.fastq small_rna/tRNA - /dev/stdout | awk '$3!="*"{{print length($10)}}' | sort | uniq -c | awk 'BEGIN{{OFS="\\t";print "type","length","count"}}{{print "tRNA",$2,$1}}' > {output.summary}) >& {log}
+		gzip miRNA/{wildcards.basename}_R1.wo_rRNA_tRNA.fastq
+		"""
+
+rule filter_rRNA_from_miRNA_fastq:
+	input:
+		"fastq/{basename}_R1.clean.fastq.gz"
+	output:
+		fq=temp("miRNA/{basename}_R1.wo_rRNA.fastq.gz"),
+		summary="miRNA/report/data/{basename}.rRNA.txt"
+	log:
+		"miRNA/log/{basename}.filter_rRNA_from_miRNA_fastq.log"
+	threads:
+		8
+	shell:
+		module_load("bowtie")+
+		"""	
+		gunzip -cd {input} | bowtie -l 15 -n 0 --nomaqround -p ${{NSLOTS:-{threads}}} -k 1 -S --sam-nohead --un=miRNA/{wildcards.basename}_R1.wo_rRNA.fastq small_rna/rRNA - /dev/stdout | awk '$3!="*"{{print length($10)}}' | sort | uniq -c | awk 'BEGIN{{OFS="\\t";print "type","length","count"}}{{print "rRNA",$2,$1}}' > {output.summary}) >& {log}
+		gzip miRNA/{wildcards.basename}_R1.wo_rRNA.fastq
+		"""
+
+### initial mapping on genome ###
+rule map_unfiltered_miRNA_fastq_on_genome:
+	input:
+		fq="fastq/{basename}_R1.clean.fastq.gz"
+	output:
+		bam="miRNA/{basename}.unfiltered.bam",
+		bai="miRNA/{basename}.unfiltered.bam.bai",
+		summary="miRNA/report/data/{basename}.unfiltered_mapping.txt"
+	log:
+		"miRNA/log/{basename}.map_unfiltered_miRNA_fastq_on_genome.log"
+	threads:
+		8
+	shell:
+		module_load("bowtie","samtools")+
+		"""
+		RG="{wildcards.basename}";LB="{wildcards.basename}";SM="{wildcards.basename}"
+		if [[ "{wildcards.basename}" =~ ^(L[0-9]+)_(.+) ]];then LB="${{BASH_REMATCH[1]}}";SM="${{BASH_REMATCH[2]}}";fi
+		gunzip -cd {input.fq} | bowtie -l 15 -v 2 -e 999 --nomaqround --best --strata -a -m 1 --chunkmbs 256 -p ${{NSLOTS:-{threads}}} -S --sam-RG ID:$RG --sam-RG LB:$LB --sam-RG SM:$SM {ALIGNER_CFG[index_directory]}/{ALIGNER_CFG[index]} - | \
+		samtools sort -O bam -T ${{TMPDIR:-.}}/{wildcards.basename} -o {output.bam} -@ 2 -
+		samtools index {output.bam}) >& {log}
+		cp {log} {output.summary}
+		"""
+

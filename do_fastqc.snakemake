@@ -1,0 +1,72 @@
+try:
+	GENERAL_SETTINGS_INCLUDED
+except NameError: 
+	include: "general_settings.snakemake"
+
+
+####################
+# Config/Parameter #
+####################
+
+###########
+# Targets #
+###########
+
+FASTQC_TARGETS = ["fastqc/fastqc_overview.pdf","fastqc/fastqc_overview.csv",expand("fastqc/{f}_fastqc.html",f=FASTQ_BASE),expand("fastqc/{f}_fastqc.zip",f=FASTQ_BASE)]
+
+##########
+# Checks #
+##########
+
+
+#########
+# Rules #
+#########
+
+shell.prefix("set -euf -o pipefail;")
+localrules: extract_fastqc_txt
+
+rule do_fastqc:
+	input:
+		FASTQC_TARGETS		
+
+rule plot_fastqc_results:
+	input:
+		expand("fastqc/{f}_fastqc.txt",f=FASTQ_BASE)
+	output:
+		"fastqc/fastqc_overview.pdf",
+		"fastqc/fastqc_overview.csv"
+	log:
+		"fastqc/log/fastqc_overview.log"
+	shell:
+		module_load("R")+		
+		"""
+		R CMD BATCH '--args {input}' /group/sequencing/Bfx/scripts/andreasp/plot_fastqc_summary.R /dev/stderr && mv fastqc_overview.pdf fastqc_overview.csv fastqc/) >& {log}
+		"""
+		
+
+rule extract_fastqc_txt:
+	input:
+		"fastqc/{basename}_fastqc.zip"
+	output:
+		temp("fastqc/{basename}_fastqc.txt")
+	shell:
+		"""
+		unzip -p {input} {wildcards.basename}_fastqc/fastqc_data.txt > {output}
+		"""
+
+rule run_fastqc:
+	input:
+		"fastq/{basename}.fastq.gz"
+	output:
+		"fastqc/{basename}_fastqc.zip",
+		"fastqc/{basename}_fastqc.html"
+	log:
+		"fastqc/log/{basename}.log"
+	shell:
+		module_load("fastqc")+
+		"""
+		fastqc -o fastqc {input}) >& {log}
+		"""
+
+
