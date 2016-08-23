@@ -222,8 +222,8 @@ else:
 	os.environ['PYTHONPATH'] = "/group/sequencing/Bfx/scripts/mathias/dsp/dsp/src"
 
 # tmp dir to use
-#TMP_DIR="${TMPDIR:-.}"
-TMP_DIR="."
+TMP_DIR="${TMPDIR:-.}"
+#TMP_DIR="."
 
 # this variable prevents that this file is included multiple times
 GENERAL_SETTINGS_INCLUDED = 1
