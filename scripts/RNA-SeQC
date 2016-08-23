@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# path of jar if module loaded
+JAR=$(module display apps/rna-seqc 2>&1 | perl -ne 'if(m/java/ && m/\s(\/\S+\.jar\b)/){print "$1\n"}' | head -1)
+
+# path of jar otherwise
+if [ -z "$JAR" ]
+then
+ JAR="/share/apps/RNA-SeQC/1.1.8/RNA-SeQC_v1.1.8.jar"
+fi
+
+# important: always do "$@"
+/usr/java/jdk1.7.0_51/bin/java $JAVA_OPTIONS -jar $JAR "$@"

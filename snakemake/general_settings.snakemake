@@ -4,10 +4,15 @@ import os
 import re
 import csv
 
-#############################
-# config file is now static #
-#############################
-configfile: "snakemake_config.json"
+##############################################################
+# config file is now static and can be in YML or JSON format #
+##############################################################
+if os.path.exists("snakemake_config.yml"):
+	configfile: "snakemake_config.yml"
+elif os.path.exists("snakemake_config.json"):
+	configfile: "snakemake_config.json"
+else:
+	raise WorkflowError("Could not find the configuration file (snakemake_config.yml/snakemake_config.json) located in this directory!")
 
 ###################################################
 # parameters from the snakemake config and checks #
@@ -112,10 +117,41 @@ if ALIGNER_CFG:
 			raise WorkflowError("Could not find the GSNAP splice site files for "+ALIGNER_CFG["index_directory"]+" specified via aligner.splicesites")
 	if ALIGNER_CFG["program"]=="bwa":
 		if not os.path.exists(ALIGNER_CFG["index_directory"]+"/"+ALIGNER_CFG["index"]+".bwt"):
-			raise WorkflowError("Could not find the BWA index files  for "+ALIGNER_CFG["index"]+" (aligner.index) in "+ALIGNER_CFG["index_directory"]+" (aligner.index_directory)!")
+			raise WorkflowError("Could not find the BWA index files for "+ALIGNER_CFG["index"]+" (aligner.index) in "+ALIGNER_CFG["index_directory"]+" (aligner.index_directory)!")
 	if ALIGNER_CFG["program"]=="bowtie1":
 		if not os.path.exists(ALIGNER_CFG["index_directory"]+"/"+ALIGNER_CFG["index"]+".1.ebwt"):
-			raise WorkflowError("Could not find the BWA index files  for "+ALIGNER_CFG["index"]+" (aligner.index) in "+ALIGNER_CFG["index_directory"]+" (aligner.index_directory)!")
+			raise WorkflowError("Could not find the bowtie1 index files for "+ALIGNER_CFG["index"]+" (aligner.index) in "+ALIGNER_CFG["index_directory"]+" (aligner.index_directory)!")
+
+
+# lib complexity information needed for the mappingstats calculations ################
+LIBCOMPLEXITY_CFG = config.get("libcomplexity",dict())
+if "subsample_size" not in LIBCOMPLEXITY_CFG:
+	LIBCOMPLEXITY_CFG["subsample_size"] = 1000000
+
+# calc_gene_complexity: calculate gene level complexity stats
+# gsnap always triggers calc_gene_complexity = 1 unless explicitly deactivated (libcomplexity.calc_gene_complexity = 0)
+if "calc_gene_complexity" not in LIBCOMPLEXITY_CFG:
+	if "program" in ALIGNER_CFG and ALIGNER_CFG["program"]=="gsnap":
+		LIBCOMPLEXITY_CFG["calc_gene_complexity"] = 1
+	else:
+		LIBCOMPLEXITY_CFG["calc_gene_complexity"] = 0
+ 
+if "calc_gene_complexity" in LIBCOMPLEXITY_CFG and LIBCOMPLEXITY_CFG["calc_gene_complexity"]==1:
+	if "exon_exon_gtf" not in LIBCOMPLEXITY_CFG:
+		if ANNOTATION_CFG and "version" in ANNOTATION_CFG and REFERENCE_CFG and "version" in REFERENCE_CFG:
+			LIBCOMPLEXITY_CFG["exon_exon_gtf"] = "/projects/seq-work/user/pipeline/libcomplexity/EnsemblGene-"+ANNOTATION_CFG["version"]+"."+REFERENCE_CFG["version"]+".TR.exon-exon.gtf"
+		else:
+			raise WorkflowError("Cannot determine the libcomplexity.exon_exon_gtf without reference.version plus annotation.version!")
+	if not os.path.exists(LIBCOMPLEXITY_CFG["exon_exon_gtf"]):
+		raise WorkflowError("Cannot find the libcomplexity.exon_exon_gtf"+LIBCOMPLEXITY_CFG["exon_exon_gtf"]+"!")
+	if "gene_relation_txt" not in LIBCOMPLEXITY_CFG:
+		if "version" in ANNOTATION_CFG and "version" in REFERENCE_CFG:
+			LIBCOMPLEXITY_CFG["gene_relation_txt"] = "/projects/seq-work/user/pipeline/libcomplexity/EnsemblGene-"+ANNOTATION_CFG["version"]+"."+REFERENCE_CFG["version"]+".TR.gene-relation.txt"
+		else:
+			raise WorkflowError("Cannot determine the libcomplexity.gene_relation_txt with reference.version and annotation.version!")
+	if not os.path.exists(LIBCOMPLEXITY_CFG["gene_relation_txt"]):
+		raise WorkflowError("Could not find "+LIBCOMPLEXITY_CFG["gene_relation_txt"]+"!")
+
 
 
 # strand ################
@@ -128,6 +164,8 @@ if STRAND!=0 and STRAND!=1 and STRAND!=2:
 # clean data ############
 CLEAN_DATA_CFG = config.get("clean_data",dict())
 
+# programs and jars ############
+PROGRAM_CFG = config.get("programs",dict())
 
 ##############################
 # names, basenames and files #
@@ -155,29 +193,37 @@ if not INPUT_CFG["libraries"]:
 FASTQ_BASE = INPUT_CFG["fastq_base"]
 LIBRARIES = INPUT_CFG["libraries"]
 
+
 #############
 # functions #
 #############
 
-# function that loads specific versions of programs
+# function that loads specific versions of programs via the module system
 def module_load(*modules):
-	PROGRAM_CFG = config.get("programs",dict())
-	module_str = "\n\t\t(module load"
+	module_str = "module load"
 	for m in list(modules):
 		module_str += " apps/"+m
 		if m in PROGRAM_CFG:
 			module_str += "/"+PROGRAM_CFG[m]
 	module_str = module_str + ";module list -l"
 	return module_str
+
 			
 
 #########
 # other #
 #########
 
+# path for scripts
+os.environ['PATH'] = "/home/sequencing/andreasp/git/deepseq-snakepipes/scripts:/home/sequencing/andreasp/git/deepseq-snakepipes/R:/group/sequencing/Bfx/scripts/common:"+os.environ['PATH']
+if "PYTHONPATH" in os.environ:
+	os.environ['PYTHONPATH'] = "/group/sequencing/Bfx/scripts/mathias/dsp/dsp/src:"+os.environ['PYTHONPATH']
+else:
+	os.environ['PYTHONPATH'] = "/group/sequencing/Bfx/scripts/mathias/dsp/dsp/src"
+
 # tmp dir to use
-TMP_DIR="${TMPDIR:-.}"
-#TMP_DIR="/tmp"
+#TMP_DIR="${TMPDIR:-.}"
+TMP_DIR="."
 
 # this variable prevents that this file is included multiple times
 GENERAL_SETTINGS_INCLUDED = 1

@@ -9,24 +9,42 @@ use Cwd 'abs_path';
 # Settings #
 ############
 
-# script, bin and config files
+# script, snakemake bin, snakemake workflow directory and configuration directory
 my $script = basename($0);
+my $script_dir = $FindBin::RealBin;
+
+our $snakemake_bin = "snakemake";
+
+our $snakemake_workflow_dir = ".";
+if($ENV{'SNAKEMAKE_WORKFLOW_DIR'}){
+	$snakemake_workflow_dir = $ENV{'SNAKEMAKE_WORKFLOW_DIR'};
+}elsif(-e "$script_dir/../snakemake"){
+	$snakemake_workflow_dir = "$script_dir/../snakemake"
+}
+
+our $snakemake_conf_dir = ".";
+if($ENV{'SNAKEMAKE_CONF_DIR'}){
+	$snakemake_conf_dir = $ENV{'SNAKEMAKE_CONF_DIR'};
+}elsif(-e "$script_dir/../config"){
+	$snakemake_conf_dir = "$script_dir/../config"
+}
+
+
+# time and file permissions
 my $start_time = time();
 my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime();
 $mon++;
 $year += 1900;
 
-# file permissions
 umask(002);
 
-# settings for the wrapper script
+# options and help
 if(scalar(@ARGV)==0){
 	help();	
 	exit(0);
 }
 
-# options
-my ($workflow,$snakefile,$configfile,$cluster_configfile,$description) = ("","","","","");
+my ($workflow,$snakefile,$configfile,$cluster_configfile,$description,$jobscript) = ("","","","","","");
 my $logdir = "snakemake_logs";
 my $jobs = 1;
 my $dryrun = 0;
@@ -37,7 +55,7 @@ my $send_mail = "";
 
 GetOptions('help|h' => \&help,
 	'full_help' => \&full_help,
-	'pipeline|w=s' => \$workflow,
+	'workflow=s' => \$workflow,
 	'snakefile|s=s' => \$snakefile,
 	'configfile=s' => \$configfile,
 	'cluster-config|u=s' => \$cluster_configfile,
@@ -45,18 +63,34 @@ GetOptions('help|h' => \&help,
 	'use_drmaa' => \$use_drmaa,
 	'use_qsub' => \$use_qsub,
 	'jobs|j=i' => \$jobs,
-	'dryrun|n' => \$dryrun,
+	'dryrun' => \$dryrun,
 	'description' => \$description,
 	'mail=s' => \$send_mail);
 
-# remaining settings (see Getopt::Long option 'pass_through') will be passed on to snakemake
 my $snakemake_params = join(" ",@ARGV);
 
-# bin and config files
-our $SNAKEMAKE_BIN = "snakemake";
-my $SNAKEMAKE_FILES = $FindBin::RealBin;
+# workflows and snakemake file checks
+if($workflow && !$snakefile){
+	$snakefile = "$snakemake_workflow_dir/$workflow.snakemake";
+}
 
-# check cluster config file
+if($snakefile){
+	if(!-e $snakefile){
+		print STDERR "$script: The snakemake file for the analysis ($snakefile) does not exist.\n";
+		exit(1);	
+	}
+}else{		
+	print STDERR "$script: Please select a workflow from the help or provide a snakemake file.\n";
+	exit(1);
+}
+
+# config file checks
+if($configfile && !-e $configfile){
+	print STDERR "$script: The configuration file for the analysis ($configfile) does not exist.\n";
+	exit(1);	
+}
+
+# cluster config file checks
 if($cluster_configfile){
 	if(!-e $cluster_configfile){
 		print STDERR "$script: The configuration file for the cluster ($cluster_configfile) does not exist.\n";
@@ -66,34 +100,22 @@ if($cluster_configfile){
 		print STDERR "$script: The configuration file for the cluster must be in JSON format and the name must end on '.json'.\n";
 		exit(1);
 	}
-}elsif(!$cluster_configfile && -e "$SNAKEMAKE_FILES/cluster.json"){
-	$cluster_configfile = "$SNAKEMAKE_FILES/cluster.json";
+}elsif(!$cluster_configfile && -e "$snakemake_conf_dir/cluster.json"){
+	$cluster_configfile = "$snakemake_conf_dir/cluster.json";
 }else{
-	print STDERR "$script: No cluster configuration file provided - all jobs will use standard resources.\n";
+	print STDERR "$script: No cluster configuration file provided or found - all jobs will use standard resources.\n";
 }
 
-
-# check job config file
-if($configfile && !-e $configfile){
-	print STDERR "$script: The configuration file for the analysis ($configfile) does not exist.\n";
-	exit(1);	
-}
-
-# check snakemake workflow file
-if($snakefile){
-	if(!-e $snakefile){
-		print "$script: The snakemake file for the analysis ($snakefile) does not exist.\n";
-		exit(1);	
-	}
-}	
-else{		
-	print STDERR "$script: Please provide a snakemake workflow file.\n";
-	exit(1);
+# jobscript checks
+$jobscript = "$snakemake_conf_dir/jobscript.sh";
+if(!-e $jobscript){
+	print STDERR "$script: Could not find the jobscript template script ($jobscript) - continue without!\n";
+	$jobscript = "";
 }
 
 # check and create log dir
 if(!-e dirname($logdir)){
-	print "$script: The directory for the logs ($logdir) was not found.\n";
+	print STDERR "$script: The directory for the logs ($logdir) was not found.\n";
 	exit(1);
 }
 
@@ -139,7 +161,7 @@ if($snakefile && $description){
 ###########
 my $cmd = "";
 
-$cmd .= $SNAKEMAKE_BIN;
+$cmd .= $snakemake_bin;
 
 # for proper colour-coding
 unless(`which unbuffer`=~/^which: no unbuffer/){
@@ -152,33 +174,29 @@ $cmd .= " --snakefile $snakefile";
 $cmd .= " --configfile $configfile" if($configfile);
 $cmd .= " --printshellcmds --dryrun" if($dryrun);
 $cmd .= " --timestamp ";
-$cmd .= " --latency-wait 90 ";
+$cmd .= " --latency-wait 600 ";
 
 # if run on the submit node of biocluster3, run as cluster job 
 my $host = `hostname`;
 if($host=~/^login-0-0/){
 	if(!$ENV{'SGE_ROOT'}){
-		print "$script: Started snakemake on submit node $host but SGE_ROOT is not set.\n";
+		print STDERR "$script: Started snakemake on submit node $host but SGE_ROOT is not set.\n";
 		exit(1);	
 	}	
 	
-	# export DRMAA_LIBRARY_PATH=
+	# use DRMAA for job control
 	if($use_drmaa){
 		$cmd = "export DRMAA_LIBRARY_PATH=".$ENV{'SGE_ROOT'}."/lib/linux-x64/libdrmaa.so;".$cmd;
-	}
-
-	# DRMAA implementation (as I understand it, snakemake creates a job template with these specifications and DRMAA then distributes the jobs - thus no qsub here)
-	# "Specifies native qsub options which will be interpreted as part of the DRMAA job template.  All options available to the qsub command may be used except for -help, -sync, -t, -verify, and -w w|v."
-	if($use_drmaa){
 		$cmd .= " --drmaa \" -b n -o $logdir -e $logdir ";
 	}
-	# standard cluster implementation (call qsub with these parameters, add a 'sleep 10' to give the queue a chance to update after each job)
+
+	# use qsub for job control, add a 'sleep 10' to give the queue a chance to update after each job
 	else{
 		$cmd .= " --cluster \"sleep 10;qsub -b n -o $logdir -e $logdir ";
 	}
 	$cmd .= " -q ngs.q ";
 
-	# pass cluster configuration
+	# pass remaining cluster configuration
 	if($cluster_configfile){
 		$cmd .= " -S {cluster.shell} -q ngs.q -l h_rt={cluster.runtime} -l mem_free={cluster.memory} -l {cluster.other_resources} -pe smp {cluster.cpu} \" --cluster-config $cluster_configfile";
 	}else{
@@ -186,8 +204,8 @@ if($host=~/^login-0-0/){
 	}
 	
 	# pass custom job script
-	if(-e "$SNAKEMAKE_FILES/jobscript.sh"){
-		$cmd .= " --jobscript $SNAKEMAKE_FILES/jobscript.sh";
+	if($jobscript){
+		$cmd .= " --jobscript $jobscript";
 	}	
 }
 
@@ -197,7 +215,7 @@ $cmd .= " --jobs $jobs";
 # add additional settings for snakemake
 $cmd .= " $snakemake_params";
 
-# catch log
+# redirect log
 if($snakefile && !$dryrun){
 	$cmd .= " 2>&1 | tee $logdir/snakemake.log";
 }
@@ -209,7 +227,7 @@ my $err = system("$cmd");
 
 
 # post-processing
-if($snakefile && !$dryrun){
+if($snakefile && !$dryrun && -e "$logdir/snakemake.log"){
 
 	# remove color codes from snakemake log
 	system('sed -i -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g" '."$logdir/snakemake.log");
@@ -234,10 +252,11 @@ sub help{
 	print "These are the settings for the wrapper script.\n";
 	print "==============================================================================================================\n\n";
 	print "--help|-h				Show available arguments for the wrapper script\n";
-	print "--full_help				Show all available arguments (wrapper script and snakemake)\n";
-	print "--snakefile|-s file.snakemake 		Snakemake file to run\n";
-	print "--description 				Print a short description about what the Snakemake file does\n";
-	print "--dryrun 				Do not run the snakemake file, just print the commands\n";
+	print "--full_help				Show all available arguments (wrapper script and Snakemake)\n";
+	print "--workflow workflow			Snakemake workflow to run - select from the list below\n";
+	print "--snakefile|-s file.snakemake		Snakemake file to run\n";
+	print "--description 				Print a short description about what the Snakemake workflow/file does\n";
+	print "--dryrun 				Do not run the Snakemake file, just print the commands\n";
 	print "--configfile file			Configuration file needed to run the snakemake file\n";
 	print "--cluster-config|-u file.json 		Configuration file to specify required cluster resources\n";
 	print "--cluster-log-dir			Directory where to save cluster stdout and stderr messages\n";
@@ -245,6 +264,20 @@ sub help{
 	print "--use_qsub 				Use standard qsub for submitting/controlling cluster jobs (default)\n";
 	print "--jobs|-j number 			Number of jobs to run in parallel (1)\n";
 	print "--mail test\@test.de			Send a mail when snakemake finishes\n";
+	print "\n";
+	print "The following Snakemake workflows are available:\n";
+	
+	my @files = glob("$snakemake_workflow_dir/*snakemake");
+	
+	if(length(@files)>0){
+		foreach my $f (@files){
+			$f = basename($f);
+			$f =~ s/\.snakemake$//;
+			print "     $f\n";
+		}
+	}else{
+		print "     none\n";
+	}
 	print "\n";
 }
 
@@ -255,7 +288,7 @@ sub full_help{
 	print "These are the settings available for snakemake. All specified settings are passed directly to the program call\n";
 	print "and will overwrite any settings made by the wrapper script.\n";
 	print "==============================================================================================================\n\n";
-	system("module load apps/snakemake;snakemake --help");
+	system("module load apps/snakemake;$snakemake_bin --help");
 	exit(0);
 }
 

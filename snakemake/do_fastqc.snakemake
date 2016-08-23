@@ -12,7 +12,7 @@ except NameError:
 # Targets #
 ###########
 
-FASTQC_TARGETS = ["fastqc/fastqc_overview.pdf","fastqc/fastqc_overview.csv",expand("fastqc/{f}_fastqc.html",f=FASTQ_BASE),expand("fastqc/{f}_fastqc.zip",f=FASTQ_BASE)]
+FASTQC_TARGETS = ["fastqc/report/pdf/"+PROJECT+"_fastqc_overview.pdf","fastqc/report/data/"+PROJECT+"_fastqc_overview.csv",expand("fastqc/{f}_fastqc.html",f=FASTQ_BASE),expand("fastqc/{f}_fastqc.zip",f=FASTQ_BASE)]
 
 ##########
 # Checks #
@@ -24,24 +24,26 @@ FASTQC_TARGETS = ["fastqc/fastqc_overview.pdf","fastqc/fastqc_overview.csv",expa
 #########
 
 shell.prefix("set -euf -o pipefail;")
+
+# simple rules are run on the head node
 localrules: extract_fastqc_txt
 
 rule do_fastqc:
 	input:
 		FASTQC_TARGETS		
 
-rule plot_fastqc_results:
+rule summarise_fastqc:
 	input:
-		expand("fastqc/{f}_fastqc.txt",f=FASTQ_BASE)
+		expand("fastqc/report/data/{f}_fastqc.txt",f=FASTQ_BASE)
 	output:
-		"fastqc/fastqc_overview.pdf",
-		"fastqc/fastqc_overview.csv"
+		"fastqc/report/pdf/"+PROJECT+"_fastqc_overview.pdf",
+		"fastqc/report/data/"+PROJECT+"_fastqc_overview.csv"
 	log:
-		"fastqc/log/fastqc_overview.log"
+		"fastqc/log/summarise_fastqc.log"
 	shell:
-		module_load("R")+		
+		"\n\t\t("+module_load("R")+
 		"""
-		R CMD BATCH '--args {input}' /group/sequencing/Bfx/scripts/andreasp/plot_fastqc_summary.R /dev/stderr && mv fastqc_overview.pdf fastqc_overview.csv fastqc/) >& {log}
+		summarise_fastqc.R {PROJECT} fastqc/report/data fastqc/report/pdf) >& {log}
 		"""
 		
 
@@ -49,7 +51,7 @@ rule extract_fastqc_txt:
 	input:
 		"fastqc/{basename}_fastqc.zip"
 	output:
-		temp("fastqc/{basename}_fastqc.txt")
+		temp("fastqc/report/data/{basename}_fastqc.txt")
 	shell:
 		"""
 		unzip -p {input} {wildcards.basename}_fastqc/fastqc_data.txt > {output}
@@ -64,7 +66,7 @@ rule run_fastqc:
 	log:
 		"fastqc/log/{basename}.log"
 	shell:
-		module_load("fastqc")+
+		"\n\t\t("+module_load("fastqc")+
 		"""
 		fastqc -o fastqc {input}) >& {log}
 		"""

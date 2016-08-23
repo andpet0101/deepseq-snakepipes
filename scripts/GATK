@@ -1,0 +1,13 @@
+#!/bin/bash 
+
+# path of jar if module loaded
+JAR=$(module display apps/GenomeAnalysisTK 2>&1 | perl -ne 'if(m/java/ && m/\s(\/\S+GenomeAnalysisTK\.jar\b)/){print "$1\n"}' | head -1)
+
+# path of jar otherwise
+if [ -z "$JAR" ]
+then
+ JAR="/share/apps/GenomeAnalysisTK/3.4-0/GenomeAnalysisTK.jar"
+fi
+
+# important: always do "$@"
+java $JAVA_OPTIONS -jar $JAR "$@"

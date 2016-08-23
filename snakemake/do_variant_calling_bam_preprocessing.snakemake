@@ -1,0 +1,233 @@
+try:
+	GENERAL_SETTINGS_INCLUDED
+except NameError: 
+	include: "general_settings.snakemake"
+
+####################
+# Config/Parameter #
+####################
+
+# info about reference needed
+if not REFERENCE_CFG:
+	raise WorkflowError("Please provide a reference configuration!")
+
+# info about aligner needed
+if not ALIGNER_CFG:
+	raise WorkflowError("Please provide an aligner configuration!")
+
+# configuration for variant calling needed
+VARIANT_CALLING_CFG = config.get("variant_calling",dict())
+
+if "base_recalibration_vcfs" in VARIANT_CALLING_CFG:
+	for f in VARIANT_CALLING_CFG["base_recalibration_vcfs"]:
+		if not os.path.exists(f):
+			raise WorkflowError("Could not find file "+f+" for variant_calling.base_recalibration_vcfs!")
+else:
+	VARIANT_CALLING_CFG["base_recalibration_vcfs"] = []
+
+###########
+# Targets #
+###########
+
+VARIANT_CALLING_BAM_BAI_TARGETS = []
+for s in LIBRARIES:
+	VARIANT_CALLING_BAM_BAI_TARGETS.append(ALIGNER_CFG["program"] + "/" + s + ".variant_calling.bam")
+	VARIANT_CALLING_BAM_BAI_TARGETS.append(ALIGNER_CFG["program"] + "/" + s + ".variant_calling.bai")
+
+#########
+# Rules #
+#########
+
+shell.prefix("set -euf -o pipefail;")
+
+rule do_variant_calling_bam_preprocessing:
+	input:
+		VARIANT_CALLING_BAM_BAI_TARGETS
+
+# if recalibration vcf has been provided, look for base-recalibrated bam, else look for indel-realigned bam
+rule make_variant_calling_bam:
+	input:
+		bam="{aligner}/{basename}." + ("recal" if VARIANT_CALLING_CFG["base_recalibration_vcfs"] else "indels") + ".bam",
+		bai="{aligner}/{basename}." + ("recal" if VARIANT_CALLING_CFG["base_recalibration_vcfs"] else "indels") + ".bai"
+
+	output:
+		bam="{aligner}/{basename}.variant_calling.bam",
+		bai="{aligner}/{basename}.variant_calling.bai"
+	shell:
+		"""
+		cp -f {input.bam} {output.bam}
+		cp -f {input.bai} {output.bai}
+		"""
+
+# recalibrate base qualities (if recalibration vcf has been provided)
+rule run_GATK_BaseRecalibrator_PrintReads:
+	input:
+		bam="{aligner}/{basename}.indels.bam",
+		bai="{aligner}/{basename}.indels.bai",
+		table="{aligner}/{basename}.recal.table"
+	output:
+		bam=temp("{aligner}/{basename}.recal.bam"),
+		bai=temp("{aligner}/{basename}.recal.bai")
+	log:
+		"{aligner}/log/{basename}.recal.log"
+	shell:
+		"\n\t\t("+module_load("GenomeAnalysisTK","picard_tools")+
+		"""
+		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx2g"
+		GATK -T PrintReads -R {REFERENCE_CFG[path]}.fa -I {input.bam} -BQSR {input.table} -o {output.bam}
+		picardtools BuildBamIndex I={output.bam} VALIDATION_STRINGENCY=SILENT TMP_DIR={TMP_DIR}) >& {log}
+		""" 
+
+# run base recalibrator (if recalibration vcf has been provided)
+rule run_GATK_BaseRecalibrator:
+	input:
+		bam="{aligner}/{basename}.indels.bam",
+		bai="{aligner}/{basename}.indels.bai",
+		check="{aligner}/vcf_integrity_check"
+	output:
+		temp("{aligner}/{basename}.recal.table")
+	log:
+		"{aligner}/log/{basename}.recal.log"
+	shell:
+		"\n\t\t("+module_load("GenomeAnalysisTK")+
+		"""
+		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx8g"
+		GATK -T BaseRecalibrator -R {REFERENCE_CFG[path]}.fa -I {input.bam} -knownSites """+(" -knownSites ".join(VARIANT_CALLING_CFG["base_recalibration_vcfs"]))+""" -o {output}) >& {log}
+		"""
+
+		
+# realigns indels in target intervals
+rule run_GATK_IndelRealigner:
+	input:
+		bam="{aligner}/{basename}.markdup.bam",
+		bai="{aligner}/{basename}.markdup.bai",
+		intervals="{aligner}/{basename}.indels.intervals"
+	output:
+		bam=temp("{aligner}/{basename}.indels.bam"),
+		bai=temp("{aligner}/{basename}.indels.bai")
+	log:
+		"{aligner}/log/{basename}.indelrealign.log"
+	shell:
+		"\n\t\t("+module_load("GenomeAnalysisTK","picard_tools")+
+		"""
+		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx8g"
+		GATK -T IndelRealigner -R {REFERENCE_CFG[path]}.fa -I {input.bam} -targetIntervals {input.intervals} -o {output.bam} --filter_reads_with_N_cigar	
+		picardtools BuildBamIndex I={output.bam} VALIDATION_STRINGENCY=SILENT TMP_DIR={TMP_DIR}) >& {log}
+		"""
+
+# creates target intervals for indel realignment in wgs/exome data
+rule run_GATK_RealignerTargetCreator_wgs:
+	input:
+		bam="bwa/{basename}.markdup.bam",
+		bai="bwa/{basename}.markdup.bai"
+	output:
+		temp("bwa/{basename}.indels.intervals")
+	log:
+		"bwa/log/{basename}.indelrealign.log"
+	shell:
+		"\n\t\t("+module_load("GenomeAnalysisTK")+
+		"""
+		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx8g"
+		GATK -T RealignerTargetCreator -R {REFERENCE_CFG[path]}.fa -I {input.bam} -o {output}) >& {log}
+		"""
+
+# creates target intervals for indel realignment in rnaseq data
+rule run_GATK_RealignerTargetCreator_rnaseq:
+	input:
+		bam="gsnap/{basename}.splitN.bam",
+		bai="gsnap/{basename}.splitN.bai"
+	output:
+		temp("gsnap/{basename}.indels.intervals")
+	log:
+		"gsnap/log/{basename}.indelrealign.log"
+	shell:
+		"\n\t\t("+module_load("GenomeAnalysisTK")+
+		"""
+		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx8g"
+		GATK -T RealignerTargetCreator -R {REFERENCE_CFG[path]}.fa -I {input.bam} -o {output}) >& {log}
+		"""
+
+# splits rnaseq alignments with the cigar operator N (indicating introns)
+rule run_GATK_SplitNCigarReads:
+	input:
+		bam="gsnap/{basename}.fixmate.bam",
+		bai="gsnap/{basename}.fixmate.bai"
+	output:
+		bam=temp("gsnap/{basename}.splitN.bam"),
+		bai=temp("gsnap/{basename}.splitN.bai")
+	log:
+		"gsnap/log/{basename}.splitN.log"
+	shell:
+		"\n\t\t("+module_load("GenomeAnalysisTK","picard_tools")+
+		"""
+		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx8g"
+		GATK -T SplitNCigarReads -R {REFERENCE_CFG[path]}.fa -I {input.bam} -o {output.bam} -rf ReassignOneMappingQuality -RMQF 255 -RMQT 60 -U ALLOW_N_CIGAR_READS
+		picardtools BuildBamIndex I={output.bam} VALIDATION_STRINGENCY=SILENT TMP_DIR={TMP_DIR}) >& {log}
+		"""
+
+# marks read duplicates
+rule run_MarkDuplicates:
+	input:
+		bam="{aligner}/{basename}.fixmate.bam",
+		bai="{aligner}/{basename}.fixmate.bai"
+	output:
+		bam=temp("{aligner}/{basename}.markdup.bam"),
+		bai=temp("{aligner}/{basename}.markdup.bai"),
+		csv=temp("{aligner}/{basename}.markdup.csv")
+	log:
+		"{aligner}/log/{basename}.markdup.log"
+	shell:
+		"\n\t\t("+module_load("picard_tools")+
+		"""
+		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx8g -XX:-UseGCOverheadLimit"
+		echo $JAVA_OPTIONS
+		picardtools MarkDuplicates I={input.bam} O={output.bam} M={output.csv} REMOVE_DUPLICATES=false CREATE_INDEX=true) >& {log}
+		"""
+
+# fixes the mate information in wgs/exome data
+rule run_FixMateInformation_wgs:
+	input:
+		"bwa/{basename}.bam"
+	output:
+		bam=temp("bwa/{basename}.fixmate.bam"),
+		bai=temp("bwa/{basename}.fixmate.bai")
+	log:
+		"bwa/log/{basename}.fixmate.log"
+	shell:
+		"\n\t\t("+module_load("picard_tools")+		
+		"""
+		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx2g"
+		picardtools FixMateInformation I={input} O={output.bam} CREATE_INDEX=true VALIDATION_STRINGENCY=SILENT SO=coordinate) >& {log}
+		"""
+
+
+# fixes the mate information in rnaseq data (also removes problematic reads with the tags below)
+rule run_FixMateInformation_rnaseq:
+	input:
+		"gsnap/{basename}.bam"
+	output:
+		bam=temp("gsnap/{basename}.fixmate.bam"),
+		bai=temp("gsnap/{basename}.fixmate.bai")
+	log:
+		"gsnap/log/{basename}.fixmate.log"
+	shell:
+		"\n\t\t("+module_load("samtools","picard_tools")+
+		"""
+		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx2g"
+		samtools view -h {input} | egrep -v "XO:Z:(CT|CC|PM|PS|PI|PL|UT|HT|HM|CM|CC|UM)" | picardtools FixMateInformation I=/dev/stdin O={output.bam} CREATE_INDEX=true VALIDATION_STRINGENCY=SILENT TMP_DIR={TMP_DIR} SO=coordinate) >& {log}
+		"""
+
+
+# checks the integrity of the VCF files provided for recalibration
+rule check_base_recalibration_vcfs:
+	output:
+		temp("{aligner}/vcf_integrity_check")
+	log:
+		"{aligner}/log/vcf_integrity_check.log"
+	priority:
+		100
+	shell:
+		"\n\t\t("+module_load("GenomeAnalysisTK")+
+		"""
+		for vcf in """+(" ".join(VARIANT_CALLING_CFG["base_recalibration_vcfs"]))+""";do GATK -T ValidateVariants -R {REFERENCE_CFG[path]}.fa -V $vcf --validationTypeToExclude ALL;done) 2>&1 | tee {output} >& {log}
+		"""

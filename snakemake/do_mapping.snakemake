@@ -7,26 +7,11 @@ except NameError:
 # Config/Parameter #
 ####################
 
-# we need at least info about aligner
+# info about aligner and libcomplexity is needed
 if not ALIGNER_CFG:
 	raise WorkflowError("Please provide an aligner configuration!")
-
-LIBCOMPLEXITY_CFG = config.get("libcomplexity",dict())
-if "subsample_size" not in LIBCOMPLEXITY_CFG:
-	LIBCOMPLEXITY_CFG["subsample_size"] = 1000000
-if "calc_gene_complexity" not in LIBCOMPLEXITY_CFG:
-	LIBCOMPLEXITY_CFG["calc_gene_complexity"] = 0
-
-if ALIGNER_CFG["program"]=="gsnap" or LIBCOMPLEXITY_CFG["calc_gene_complexity"]==1:
-	LIBCOMPLEXITY_CFG["calc_gene_complexity"] = 1
-	if "exon_exon_gtf" not in LIBCOMPLEXITY_CFG:
-		if ANNOTATION_CFG and "version" in ANNOTATION_CFG and REFERENCE_CFG and "version" in REFERENCE_CFG:
-			LIBCOMPLEXITY_CFG["exon_exon_gtf"] = "/projects/seq-work/user/pipeline/libcomplexity/EnsemblGene-"+ANNOTATION_CFG["version"]+"."+REFERENCE_CFG["version"]+".TR.exon-exon.gtf"
-		else:
-			raise WorkflowError("Cannot determine the libcomplexity.exon_exon_gtf without reference.version plus annotation.version!")
-	if not os.path.exists(LIBCOMPLEXITY_CFG["exon_exon_gtf"]):
-		raise WorkflowError("Cannot find the libcomplexity.exon_exon_gtf"+LIBCOMPLEXITY_CFG["exon_exon_gtf"]+"!")
-
+if not LIBCOMPLEXITY_CFG:
+	raise WorkflowError("Please provide a libcomplexity configuration!")
 
 BEDTOOLS_STRAND_PARAM = "" if STRAND==0 else "-s" if STRAND==1 else "-S"
 EXON_EXON_GTF_PARAM = LIBCOMPLEXITY_CFG["exon_exon_gtf"] if "exon_exon_gtf" in LIBCOMPLEXITY_CFG else ""
@@ -36,14 +21,17 @@ CALC_GENE_COMPLEXITY = LIBCOMPLEXITY_CFG["calc_gene_complexity"]
 # Targets #
 ###########
 
+# produce bam and bai files
 BAM_FILES = [ALIGNER_CFG["program"] + "/" + s + ".bam" for s in LIBRARIES]
 BAI_FILES = [ALIGNER_CFG["program"] + "/" + s + ".bam.bai" for s in LIBRARIES]
 
+# produce mapping stats files
 MAPPING_STATS_FILES = []
 for s in LIBRARIES:
 	MAPPING_STATS_FILES.append(ALIGNER_CFG["program"] + "/report/data/" + PROJECT + "_" + s + "_alignment_stats.csv")
 	MAPPING_STATS_FILES.append(ALIGNER_CFG["program"] + "/report/data/" + PROJECT + "_" + s + "_alignment_complexity.csv")
 
+# produce mapping stats plots
 MAPPING_PLOTS_FILES = []
 for s in ["subsample_number_1","complete_number_1","subsample_percent_1","complete_percent_1"]:
 	file_base = PROJECT + "_alignmentcomplexity_" + s + "." + ("Complete_Gene" if LIBCOMPLEXITY_CFG["calc_gene_complexity"] else "Complete") + "." + ALIGNER_CFG["program"]
@@ -58,9 +46,10 @@ MAPPING_TARGETS = [BAM_FILES,BAI_FILES,MAPPING_PLOTS_FILES]
 #########
 
 shell.prefix("set -euf -o pipefail;")
+
+# paired mapping supersedes single mapping
 ruleorder: run_gsnap_paired > run_gsnap_single
 ruleorder: run_bwa_paired > run_bwa_single
-
 
 rule do_mapping:
 	input:
@@ -74,10 +63,9 @@ rule make_mapping_plots:
 	log:
 		ALIGNER_CFG["program"] + "/log/figures_mappingstatistics.log"
 	shell:
-		module_load("python","R")+
+		"\n\t\t("+module_load("python","R")+
 		"""
-		export PYTHONPATH=/group/sequencing/Bfx/scripts/mathias/dsp/dsp/src:$PYTHONPATH
-		/group/sequencing/Bfx/scripts/common/figures_mappingstatistics.py -i {ALIGNER_CFG[program]}/report/data -r {ALIGNER_CFG[program]}/report -s """ + ("Complete Gene" if CALC_GENE_COMPLEXITY==1 else "Complete")  + """ -b {PROJECT}) >& {log}
+		figures_mappingstatistics.py -i {ALIGNER_CFG[program]}/report/data -r {ALIGNER_CFG[program]}/report -s """ + ("Complete Gene" if CALC_GENE_COMPLEXITY==1 else "Complete")  + """ -b {PROJECT}) >& {log}
 		"""
 
 if CALC_GENE_COMPLEXITY==1:
@@ -90,11 +78,10 @@ if CALC_GENE_COMPLEXITY==1:
 		log:
 			ALIGNER_CFG["program"] + "/log/" + PROJECT + "_{basename}.calculate_mapping_stats.log"
 		shell:
-			module_load("python","bedtools","samtools")+
+			"\n\t\t("+module_load("python","bedtools","samtools")+
 			"""
-			export PYTHONPATH=/group/sequencing/Bfx/scripts/mathias/dsp/dsp/src:$PYTHONPATH
-			samtools view -F 0x100 -b {input.bam} | /group/sequencing/Bfx/scripts/common/calculate_mappingstatistics.py -b {PROJECT} -f -m -l -o {ALIGNER_CFG[program]}/report -s Complete -i {LIBCOMPLEXITY_CFG[subsample_size]}
-			samtools view -F 0x100 -b {input.bam} | bedtools intersect {BEDTOOLS_STRAND_PARAM} -u -f 0.5 -split -a stdin -b {EXON_EXON_GTF_PARAM} | /group/sequencing/Bfx/scripts/common/calculate_mappingstatistics.py -b {PROJECT} -f -l -o {ALIGNER_CFG[program]}/report -s Gene -i {LIBCOMPLEXITY_CFG[subsample_size]}) &> {log}
+			samtools view -F 0x100 -b {input.bam} | calculate_mappingstatistics.py -b {PROJECT} -f -m -l -o {ALIGNER_CFG[program]}/report -s Complete -i {LIBCOMPLEXITY_CFG[subsample_size]}
+			samtools view -F 0x100 -b {input.bam} | bedtools intersect {BEDTOOLS_STRAND_PARAM} -u -f 0.5 -split -a stdin -b {EXON_EXON_GTF_PARAM} | calculate_mappingstatistics.py -b {PROJECT} -f -l -o {ALIGNER_CFG[program]}/report -s Gene -i {LIBCOMPLEXITY_CFG[subsample_size]}) &> {log}
 			"""
 else:
 	rule calculate_mapping_stats:
@@ -106,29 +93,26 @@ else:
 		log:
 			ALIGNER_CFG["program"] + "/log/" + PROJECT + "_{basename}.calculate_mapping_stats.log"
 		shell:
-			module_load("python","bedtools","samtools")+
+			"\n\t\t("+module_load("python","bedtools","samtools")+
 			"""
-			export PYTHONPATH=/group/sequencing/Bfx/scripts/mathias/dsp/dsp/src:$PYTHONPATH
-			samtools view -F 0x100 -b {input.bam} | /group/sequencing/Bfx/scripts/common/calculate_mappingstatistics.py -b {PROJECT} -f -m -l -o {ALIGNER_CFG[program]}/report -s Complete -i {LIBCOMPLEXITY_CFG[subsample_size]}) >& {log}
+			samtools view -F 0x100 -b {input.bam} | calculate_mappingstatistics.py -b {PROJECT} -f -m -l -o {ALIGNER_CFG[program]}/report -s Complete -i {LIBCOMPLEXITY_CFG[subsample_size]}) >& {log}
 			"""
 
 
 rule index_bam:
 	input:
-		"{basename}.bam"
+		ALIGNER_CFG["program"] + "/{basename}.bam"
 	output:
-		"{basename}.bam.bai"
+		ALIGNER_CFG["program"] + "/{basename}.bam.bai"
 	log:
-		"{basename}.bam.bai.log"
+		ALIGNER_CFG["program"] + "/log/{basename}.bam.bai.log"
 	shell:
-		module_load("samtools")+
+		"\n\t\t("+module_load("samtools")+
 		"""
 		samtools index {input}) >& {log}
 		"""	
 
-#######
-# BWA #
-#######
+# BWA #####
 
 rule run_bwa_single:
 	input:
@@ -140,7 +124,7 @@ rule run_bwa_single:
 	threads:
 		8
 	shell:
-		module_load("bwa","samtools")+
+		"\n\t\t("+module_load("bwa","samtools")+
 		"""
 		RG="{wildcards.basename}";LB="{wildcards.basename}";SM="{wildcards.basename}"
 		if [[ "{wildcards.basename}" =~ ^(L[0-9]+)_(.+) ]];then LB="${{BASH_REMATCH[1]}}";SM="${{BASH_REMATCH[2]}}";fi
@@ -159,7 +143,7 @@ rule run_bwa_paired:
 	threads:
 		8
 	shell:
-		module_load("bwa","samtools")+
+		"\n\t\t("+module_load("bwa","samtools")+
 		"""
 		RG="{wildcards.basename}";LB="{wildcards.basename}";SM="{wildcards.basename}"
 		if [[ "{wildcards.basename}" =~ ^(L[0-9]+)_(.+) ]];then LB="${{BASH_REMATCH[1]}}";SM="${{BASH_REMATCH[2]}}";fi
@@ -167,11 +151,47 @@ rule run_bwa_paired:
 		samtools sort -O bam -T {TMP_DIR}/{wildcards.basename} -o {output} -@ 2 -) >& {log}
 		"""
 
+# bowtie1 #####
 
-#########
-# gsnap #
-#########
+rule run_bowtie1_single:
+	input:
+		"fastq/{basename}_R1.clean.fastq.gz" if CLEAN_DATA_CFG else "fastq/{basename}_R1.fastq.gz"
+	output:
+		bam="bowtie1/{basename}.bam"
+	log:
+		"bwa/log/{basename}.log"
+	threads:
+		8
+	shell:
+		"\n\t\t("+module_load("bowtie1","samtools")+
+		"""
+		RG="{wildcards.basename}";LB="{wildcards.basename}";SM="{wildcards.basename}"
+		if [[ "{wildcards.basename}" =~ ^(L[0-9]+)_(.+) ]];then LB="${{BASH_REMATCH[1]}}";SM="${{BASH_REMATCH[2]}}";fi
+		gunzip -cd {input} | {ALIGNER_CFG[binary]} -S --sam-RG ID:$RG --sam-RG LB:$LB --sam-RG SM:$SM -p `expr ${{NSLOTS:-{threads}}} - 2` {ALIGNER_CFG[parameter]} {ALIGNER_CFG[index_directory]}/{ALIGNER_CFG[index]} - | \
+		samtools sort -O bam -T ${{TMPDIR:-.}}/{wildcards.basename} -o {output.bam} -@ 2 -) >& {log}
+		"""
 
+rule run_bowtie1_paired:
+	input:
+		fq1="fastq/{basename}_R1.clean.fastq.gz" if CLEAN_DATA_CFG else "fastq/{basename}_R1.fastq.gz",
+		fq2="fastq/{basename}_R2.clean.fastq.gz" if CLEAN_DATA_CFG else "fastq/{basename}_R2.fastq.gz"
+	output:
+		bam="bowtie1/{basename}.bam"
+	log:
+		"bwa/log/{basename}.log"
+	threads:
+		8
+	shell:
+		"\n\t\t("+module_load("bowtie1","samtools")+
+		"""
+		RG="{wildcards.basename}";LB="{wildcards.basename}";SM="{wildcards.basename}"
+		if [[ "{wildcards.basename}" =~ ^(L[0-9]+)_(.+) ]];then LB="${{BASH_REMATCH[1]}}";SM="${{BASH_REMATCH[2]}}";fi
+		{ALIGNER_CFG[binary]} -S --sam-RG ID:$RG --sam-RG LB:$LB --sam-RG SM:$SM -p `expr ${{NSLOTS:-{threads}}} - 2` {ALIGNER_CFG[parameter]} {ALIGNER_CFG[index_directory]}/{ALIGNER_CFG[index]} -1 <( zcat {input.fq1} ) -2 <( zcat {input.fq2} ) | \
+		samtools sort -O bam -T ${{TMPDIR:-.}}/{wildcards.basename} -o {output.bam} -@ 2 -) >& {log}
+		"""
+
+
+# gsnap #####
 
 rule run_gsnap_single:
 	input:
@@ -184,7 +204,7 @@ rule run_gsnap_single:
 	threads:
 		8
 	shell:
-		module_load("gmap","samtools")+
+		"\n\t\t("+module_load("gmap","samtools")+
 		"""
 		RG="{wildcards.basename}";LB="{wildcards.basename}";SM="{wildcards.basename}"
 		if [[ "{wildcards.basename}" =~ ^(L[0-9]+)_(.+) ]];then LB="${{BASH_REMATCH[1]}}";SM="${{BASH_REMATCH[2]}}";fi
@@ -204,7 +224,7 @@ rule run_gsnap_paired:
 	threads:
 		8
 	shell:
-		module_load("gmap","samtools")+
+		"\n\t\t("+module_load("gmap","samtools")+
 		"""
 		RG="{wildcards.basename}";LB="{wildcards.basename}";SM="{wildcards.basename}"
 		if [[ "{wildcards.basename}" =~ ^(L[0-9]+)_(.+) ]];then LB="${{BASH_REMATCH[1]}}";SM="${{BASH_REMATCH[2]}}";fi

@@ -1,0 +1,421 @@
+try:
+	GENERAL_SETTINGS_INCLUDED
+except NameError: 
+	include: "general_settings.snakemake"
+
+####################
+# Config/Parameter #
+####################
+
+# info about reference needed
+if not REFERENCE_CFG:
+	raise WorkflowError("Please provide a reference configuration!")
+
+# info about aligner needed
+if not ALIGNER_CFG:
+	raise WorkflowError("Please provide an aligner configuration!")
+
+# configuration for variant calling needed
+VARIANT_CALLING_CFG = config.get("variant_calling",dict())
+
+# vcf for SNP recalibration
+if "snp_recalibration_vcfs" in VARIANT_CALLING_CFG:
+	for f in VARIANT_CALLING_CFG["snp_recalibration_vcfs"]:
+		p = f.split()
+		if len(p) != 2:
+			raise WorkflowError("The variant_calling.snp_recalibration_vcfs entries should have the following format: 'annotations vcf_file'! Please check GATK VariantRecalibrator ('-ressource').")
+		if not os.path.exists(p[1]):
+			raise WorkflowError("Could not find file "+p[1]+" for variant_calling.snp_recalibration_vcfs entry!")
+else:
+	VARIANT_CALLING_CFG["snp_recalibration_vcfs"] = []
+
+# vcf for indel recalibration
+if "indel_recalibration_vcfs" in VARIANT_CALLING_CFG:
+	for f in VARIANT_CALLING_CFG["indel_recalibration_vcfs"]:
+		p = f.split()
+		if len(p) != 2:
+			raise WorkflowError("The variant_calling.indel_recalibration_vcfs entries should have the following format: 'annotations vcf_file'! Please check GATK VariantRecalibrator ('-ressource').")
+		if not os.path.exists(p[1]):
+			raise WorkflowError("Could not find file "+p[1]+" for variant_calling.indel_recalibration_vcfs entry!")
+else:
+	VARIANT_CALLING_CFG["indel_recalibration_vcfs"] = []
+
+# vcf for SNP annotation
+if "snv_db_vcf" in VARIANT_CALLING_CFG:
+	if not os.path.exists(VARIANT_CALLING_CFG["snv_db_vcf"]):
+		raise WorkflowError("Could not find file "+VARIANT_CALLING_CFG["snv_db_vcf"]+" for variant_calling.snv_db_vcf!")
+else:
+	VARIANT_CALLING_CFG["snv_db_vcf"] = ""
+
+# bed file for target regions
+if "target_regions_bed" in VARIANT_CALLING_CFG:
+	if not os.path.exists(VARIANT_CALLING_CFG["target_regions_bed"]):
+		raise WorkflowError("Could not find file "+VARIANT_CALLING_CFG["target_regions_bed"]+" for variant_calling.target_regions_bed!")
+else:
+	VARIANT_CALLING_CFG["target_regions_bed"] = ""
+
+# vep cache for VEP annotation
+if "vep_cache" in VARIANT_CALLING_CFG:
+	if not os.path.exists(VARIANT_CALLING_CFG["vep_cache"]):
+		raise WorkflowError("Could not find directory "+VARIANT_CALLING_CFG["vep_cache"]+" for variant_calling.vep_cache!")
+else:
+	VARIANT_CALLING_CFG["vep_cache"] = ""
+
+
+# path to VEP perl
+if "vep" not in PROGRAM_CFG:
+	PROGRAM_CFG["vep"]="/group/sequencing/Bfx/scripts/extern/ensembl-tools-release-81/scripts/variant_effect_predictor/variant_effect_predictor.pl"
+
+###########
+# Targets #
+###########
+
+SNV_CALLING_TARGETS = []
+
+if ALIGNER_CFG["program"] == "gsnap":
+	SNV_CALLING_TARGETS.append("gatk/RNAseq_SNVs.final.vcf.gz")
+	SNV_CALLING_TARGETS.append("gatk/RNAseq_SNVs.final.vcf.gz.tbi")
+elif ALIGNER_CFG["program"] == "bwa" or ALIGNER_CFG["program"] == "bowtie1":
+	SNV_CALLING_TARGETS.append("gatk/DNAseq_SNVs.final.vcf.gz")
+	SNV_CALLING_TARGETS.append("gatk/DNAseq_SNVs.final.vcf.gz.tbi")
+
+#########
+# Rules #
+#########
+
+shell.prefix("set -euf -o pipefail;")
+
+### annotation ###
+
+# decide which variation pipeline should be used
+rule do_SNV_calling:
+	input:
+		"gatk/"+("DNAseq" if ALIGNER_CFG["program"] == "bwa" else "RNAseq")+"_SNVs.final.vcf.gz",
+		"gatk/"+("DNAseq" if ALIGNER_CFG["program"] == "bwa" else "RNAseq")+"_SNVs.final.vcf.gz.tbi"
+
+
+# decide which annotation steps should be done
+rule annotate_SNV_variants:
+	input:
+		vcf="gatk/{basename}."+("vep" if VARIANT_CALLING_CFG["vep_cache"] else "dbsnp" if VARIANT_CALLING_CFG["snv_db_vcf"] else "filt")+".vcf.gz",
+		tbi="gatk/{basename}."+("vep" if VARIANT_CALLING_CFG["vep_cache"] else "dbsnp" if VARIANT_CALLING_CFG["snv_db_vcf"] else "filt")+".vcf.gz.tbi"
+	output:
+		vcf="gatk/{basename}.final.vcf.gz",
+		tbi="gatk/{basename}.final.vcf.gz.tbi"
+	shell:
+		"""
+		cp {input.vcf} {output.vcf}
+		cp {input.tbi} {output.tbi}
+		"""
+
+
+# run variant effect predictor to predict functional consequences (note: need to remove the 'chr' in the vcf file, e.g. replace >chr1 with 1) 
+rule run_VariantEffectPredictor:
+	input:
+		vcf="gatk/{basename}."+("dbsnp" if VARIANT_CALLING_CFG["snv_db_vcf"] else "filt")+".vcf.gz",
+		tbi="gatk/{basename}."+("dbsnp" if VARIANT_CALLING_CFG["snv_db_vcf"] else "filt")+".vcf.gz.tbi",
+		ref="gatk/ref_formatted_for_vep.fa"
+	output:
+		vcf="gatk/{basename}.vep.vcf.gz",
+		tbi="gatk/{basename}.vep.vcf.gz.tbi",
+		csv="gatk/{basename}.vep.csv.gz",
+		stats="gatk/{basename}.vep.txt"
+	log:
+		"gatk/log/{basename}.run_VariantEffectPredictor.log"
+	threads:
+		12
+	shell:
+		"\n\t\t("+module_load("perl","samtools")+
+		"""
+		gunzip -cd {input.vcf} | perl -pe 'unless(m/^#/){{s/^chr//}}' > {input.vcf}.for_vep.vcf
+		perl {PROGRAM_CFG[vep]} -i {input.vcf}.for_vep.vcf --cache --dir {VARIANT_CALLING_CFG[vep_cache]} --sift b --polyphen b --symbol --numbers --biotype --total_length \
+		-o {output.vcf}.for_vep.vcf --vcf --fields Consequence,Codons,Amino_acids,HGVSc,HGVSp,Gene,SYMBOL,Feature,EXON,PolyPhen,SIFT,Protein_position,BIOTYPE \
+		--fork ${{NSLOTS:-{threads}}} --force_overwrite --hgvs --port 3337 --fasta {input.ref}		
+		perl {PROGRAM_CFG[vep]} -i {input.vcf}.for_vep.vcf --cache --dir {VARIANT_CALLING_CFG[vep_cache]} -o {output.vcf}.for_vep.csv --stats_file {output.stats} --stats_text --everything --fork ${{NSLOTS:-{threads}}} --force_overwrite --port 3337 --fasta {input.ref}
+		cat {output.vcf}.for_vep.vcf | perl -pe 'unless(m/^#/){{s/^/chr/}}' | bgzip -c > {output.vcf} && tabix -p vcf {output.vcf}
+		cat {output.vcf}.for_vep.csv | convert_vep_format_to_csv.pl | gzip -c > {output.csv}) >& {log}
+		rm {input.vcf}.for_vep.vcf {output.vcf}.for_vep.vcf
+		"""
+
+# for variant effect predictor: we need a special reference without the 'chr', e.g. replace >chr1 with 1
+rule prepare_reference_for_VariantEffectPredictor:
+	output:
+		temp("gatk/ref_formatted_for_vep.fa")
+	shell:
+		"""
+		cat {REFERENCE_CFG[path]}.fa | perl -pe 's/>chr/>/' | perl -pe 'unless(m/^>/){{$_=uc($_);}}' > {output}
+		"""
+
+# annotate variants with ids (note: VariantAnnotator has problems with gzipped vcf, thus gunzip)
+rule run_GATK_VariantAnnotator_dbsnp:
+	input:
+		vcf="gatk/{basename}.filt.vcf.gz",
+		tbi="gatk/{basename}.filt.vcf.gz.tbi",
+		check="gatk/vcf_integrity_check"
+	output:
+		vcf="gatk/{basename}.dbsnp.vcf.gz",
+		tbi="gatk/{basename}.dbsnp.vcf.gz.tbi"
+	log:
+		"gatk/log/{basename}.run_GATK_VariantAnnotator_dbsnp.log"
+	shell:
+		"\n\t\t("+module_load("GenomeAnalysisTK")+
+		"""
+		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx2G"
+		gunzip -cd {input.vcf} > {input.vcf}.tmp.vcf
+		GATK -T VariantAnnotator -R {REFERENCE_CFG[path]}.fa -V {input.vcf}.tmp.vcf -o {output.vcf} --dbsnp {VARIANT_CALLING_CFG[snv_db_vcf]}) >& {log}
+		rm {input.vcf}.tmp.vcf {input.vcf}.tmp.vcf.idx
+		"""
+
+### RNA-seq data (if gsnap) ###
+
+rule filter_SNVs_rnaseq:
+	input:
+		vcf="gatk/RNAseq_SNVs.varfilt.vcf.gz",
+		tbi="gatk/RNAseq_SNVs.varfilt.vcf.gz.tbi",
+	output:
+		vcf="gatk/RNAseq_SNVs.filt.vcf.gz",
+		tbi="gatk/RNAseq_SNVs.filt.vcf.gz.tbi"
+	shell:
+		"""
+		cp {input.vcf} {output.vcf}
+		cp {input.tbi} {output.tbi}
+		"""
+
+
+# for rnaseq data: hard filtering
+rule run_GATK_VariantFiltration_rnaseq:
+	input:
+		vcf="gatk/RNAseq_SNVs.raw.vcf.gz",
+		tbi="gatk/RNAseq_SNVs.raw.vcf.gz.tbi",
+	output:
+		vcf=temp("gatk/RNAseq_SNVs.varfilt.vcf.gz"),
+		tbi=temp("gatk/RNAseq_SNVs.varfilt.vcf.gz.tbi")
+	log:
+		"gatk/log/RNAseq_SNVs.variantfiltration.log"
+	threads:
+		8
+	shell:
+		"\n\t\t("+module_load("GenomeAnalysisTK")+
+		"""
+		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx2G"
+		GATK -T VariantFiltration -R {REFERENCE_CFG[path]}.fa -V {input.vcf} -o {output.vcf} -window 35 -cluster 3 -filter "FS > 30.0 || QD < 2.0" -filterName "SNP_filter")  >& {log}
+		"""
+
+
+# for rnaseq data: run HaplotyperCaller and produce vcf
+rule run_GATK_HaplotypeCaller_rnaseq:
+	input:
+		bams=[ALIGNER_CFG["program"] + "/" + s + ".variant_calling.bam" for s in INPUT_CFG["libraries"]],
+		bai=[ALIGNER_CFG["program"] + "/" + s + ".variant_calling.bai" for s in INPUT_CFG["libraries"]]
+	output:
+		vcf="gatk/RNAseq_SNVs.raw.vcf.gz",
+		tbi="gatk/RNAseq_SNVs.raw.vcf.gz.tbi"
+	log:
+		"gatk/log/RNAseq_SNVs.haplotypecaller.log"
+	threads:
+		8
+	shell:
+		"\n\t\t("+module_load("GenomeAnalysisTK")+
+		"""
+		export JAVA_OPTIONS="-Djava.io.tmpdir=. -Xmx60G"
+		GATK -T HaplotypeCaller -R {REFERENCE_CFG[path]}.fa $(printf -- ' -I %s ' {input.bams}) -o {output.vcf} -dontUseSoftClippedBases -stand_call_conf 20.0 -stand_emit_conf 20.0 \
+		-nct ${{NSLOTS:-{threads}}} """+("--interval_padding 100 -L "+VARIANT_CALLING_CFG["target_regions_bed"] if VARIANT_CALLING_CFG["target_regions_bed"] else "")+""") >& {log}
+		"""
+
+
+### DNAseq data (if bwa) ###
+
+# the following if else decides how to filter: do indel-recal OR skip and only to snp-recal OR do hard filtering
+rule filter_SNVs_wgs:
+	input:
+		vcf="gatk/DNAseq_SNVs." + ("recal_indels" if VARIANT_CALLING_CFG["indel_recalibration_vcfs"] else "recal_snp" if VARIANT_CALLING_CFG["snp_recalibration_vcfs"] else "varfilt") + ".vcf.gz",
+		tbi="gatk/DNAseq_SNVs." + ("recal_indels" if VARIANT_CALLING_CFG["indel_recalibration_vcfs"] else "recal_snp" if VARIANT_CALLING_CFG["snp_recalibration_vcfs"] else "varfilt") + ".vcf.gz"
+	output:
+		vcf="gatk/DNAseq_SNVs.filt.vcf.gz",
+		tbi="gatk/DNAseq_SNVs.filt.vcf.gz.tbi"
+	shell:
+		"""
+		cp {input.vcf} {output.vcf}
+		cp {input.tbi} {output.tbi}		
+		"""
+
+# for wgs/exome data: hard filtering (if recalibration files are not available)
+rule run_GATK_VariantFiltration_wgs:
+	input:
+		vcf="gatk/DNAseq_SNVs.raw.vcf.gz",
+		tbi="gatk/DNAseq_SNVs.raw.vcf.gz.tbi",
+	output:
+		vcf=temp("gatk/DNAseq_SNVs.varfilt.vcf.gz"),
+		tbi=temp("gatk/DNAseq_SNVs.varfilt.vcf.gz.tbi")
+	log:
+		"gatk/log/DNAseq_SNVs.variantfiltration.log"
+	shell:
+		"\n\t\t("+module_load("GenomeAnalysisTK")+
+		"""
+		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx2G"
+		GATK -T VariantFiltration -R {REFERENCE_CFG[path]}.fa -V {input.vcf} -o {output.vcf} \
+		--filterExpression '!vc.isIndel() && (QD < 2.0 || FS > 60.0 || MQ < 40.0 || MQRankSum < -12.5 || ReadPosRankSum < -8.0 || SOR > 4.0)' --filterName 'SNP_filter' \
+		--filterExpression 'vc.isIndel() && (QD < 2.0 || FS > 200.0 || ReadPosRankSum < -20.0 || SOR > 10.0)' --filterName 'INDEL_filter') >& {log}
+		"""
+
+# for wgs/exome data: apply indel recalibration (if recalibration vcfs have been provided)
+# the if else decides if to skip the snp-recal step
+rule run_GATK_ApplyRecalibration_indels:
+	input:
+		vcf="gatk/DNAseq_SNVs."+("recal_snp" if VARIANT_CALLING_CFG["snp_recalibration_vcfs"] else "raw")+".vcf.gz",
+		tbi="gatk/DNAseq_SNVs."+("recal_snp" if VARIANT_CALLING_CFG["snp_recalibration_vcfs"] else "raw")+".vcf.gz.tbi",
+		recal="gatk/DNAseq_SNVs.indels.recal",
+		tranches="gatk/DNAseq_SNVs.indels.tranches"
+	output:
+		vcf=temp("gatk/DNAseq_SNVs.recal_indels.vcf.gz"),
+		tbi=temp("gatk/DNAseq_SNVs.recal_indels.vcf.gz.tbi")
+	log:
+		"gatk/log/DNAseq_SNVs.variantrecalibrator.log"
+	threads:
+		8
+	shell:
+		"\n\t\t("+module_load("GenomeAnalysisTK")+
+		"""
+		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx2G"
+		GATK -T ApplyRecalibration -R {REFERENCE_CFG[path]}.fa -input {input.vcf} -recalFile {input.recal} -tranchesFile {input.tranches} -o {output.vcf} --ts_filter_level 99.0 -mode indel) >& 2>> {log} 1>&2
+		"""
+
+# for wgs/exome data: run variant recalibrator for indels (if recalibration vcfs have been provided)
+# the if else decides if to skip the snp-recal step
+rule run_GATK_VariantRecalibrator_indels:
+	input:
+		vcf="gatk/DNAseq_SNVs."+("recal_snp" if VARIANT_CALLING_CFG["snp_recalibration_vcfs"] else "raw")+".vcf.gz",
+		tbi="gatk/DNAseq_SNVs."+("recal_snp" if VARIANT_CALLING_CFG["snp_recalibration_vcfs"] else "raw")+".vcf.gz.tbi",
+		check="gatk/vcf_integrity_check"
+	output:
+		recal=temp("gatk/DNAseq_SNVs.indels.recal"),
+		tranches=temp("gatk/DNAseq_SNVs.indels.tranches")
+	log:
+		"gatk/log/DNAseq_SNVs.variantrecalibrator.log"
+	threads:
+		8
+	shell:
+		"\n\t\t("+module_load("GenomeAnalysisTK")+
+		"""
+		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx12G"
+		GATK -T VariantRecalibrator -R {REFERENCE_CFG[path]}.fa -input {input.vcf} -recalFile {output.recal} -tranchesFile {output.tranches} \
+		-resource:"""+(" -resource:".join(VARIANT_CALLING_CFG["indel_recalibration_vcfs"]))+""" -an QD -an DP -an FS -an SOR -an MQRankSum -an ReadPosRankSum  -mode INDEL --maxGaussians 2 \
+		-tranche 100.0 -tranche 99.9 -tranche 99.0 -tranche 90.0) 2>> {log} 1>&2
+		"""
+
+
+# for wgs/exome data: apply SNP recalibration (if recalibration vcfs have been provided)
+rule run_GATK_ApplyRecalibration_snp:
+	input:
+		vcf="gatk/DNAseq_SNVs.raw.vcf.gz",
+		tbi="gatk/DNAseq_SNVs.raw.vcf.gz.tbi",
+		recal="gatk/DNAseq_SNVs.snp.recal",
+		tranches="gatk/DNAseq_SNVs.snp.tranches"
+	output:
+		vcf=temp("gatk/DNAseq_SNVs.recal_snp.vcf.gz"),
+		tbi=temp("gatk/DNAseq_SNVs.recal_snp.vcf.gz.tbi")
+	log:
+		"gatk/log/DNAseq_SNVs.variantrecalibrator.log"
+	shell:
+		"\n\t\t("+module_load("GenomeAnalysisTK")+
+		"""
+		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx2G"
+		GATK -T ApplyRecalibration -R {REFERENCE_CFG[path]}.fa -input {input.vcf} -recalFile {input.recal} -tranchesFile {input.tranches} -o {output.vcf} --ts_filter_level 99.0 -mode SNP) 2>> {log} 1>&2
+		"""
+
+
+# for wgs/exome data: run variant recalibrator for SNPs (if recalibration vcfs have been provided)
+rule run_GATK_VariantRecalibrator_snp:
+	input:
+		vcf="gatk/DNAseq_SNVs.raw.vcf.gz",
+		tbi="gatk/DNAseq_SNVs.raw.vcf.gz.tbi",
+		check="gatk/vcf_integrity_check"
+	output:
+		recal=temp("gatk/DNAseq_SNVs.snp.recal"),
+		tranches=temp("gatk/DNAseq_SNVs.snp.tranches")
+	log:
+		"gatk/log/DNAseq_SNVs.variantrecalibrator.log"
+	threads:
+		8
+	shell:
+		"\n\t\t("+module_load("GenomeAnalysisTK")+
+		"""
+		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx12G"
+		GATK -T VariantRecalibrator -R {REFERENCE_CFG[path]}.fa -input {input.vcf} -recalFile {output.recal} -tranchesFile {output.tranches} \
+		-resource:"""+(" -resource:".join(VARIANT_CALLING_CFG["snp_recalibration_vcfs"]))+""" -an DP -an QD -an FS -an SOR -an MQ -an MQRankSum -an ReadPosRankSum -mode SNP --maxGaussians 4  \
+		-tranche 100.0 -tranche 99.9 -tranche 99.0 -tranche 90.0) >& {log}
+		"""
+
+
+# for wgs/exome data: genotype combined sample gvcf
+rule run_GATK_GenotypeGVCFs:
+	input:
+		gvcf="gatk/DNAseq_SNVs.raw.gvcf.gz",
+		tbi="gatk/DNAseq_SNVs.raw.gvcf.gz.tbi",
+	output:
+		vcf="gatk/DNAseq_SNVs.raw.vcf.gz",
+		tbi="gatk/DNAseq_SNVs.raw.vcf.gz.tbi",
+	log:
+		"gatk/log/DNAseq_SNVs.genotypeGVCF.log"
+	shell:
+		"\n\t\t("+module_load("GenomeAnalysisTK")+
+		"""
+		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx16G"
+		GATK -T GenotypeGVCFs -R {REFERENCE_CFG[path]}.fa --variant {input.gvcf} -o {output.vcf}) >& {log}
+		"""
+
+
+# for wgs/exome data: combine sample gvcf
+rule run_GATK_CombineGVCF:
+	input:
+		gvcf=["gatk" + "/" + s + ".haplotypecaller.gvcf.gz" for s in INPUT_CFG["libraries"]],
+		tbi=["gatk" + "/" + s + ".haplotypecaller.gvcf.gz.tbi" for s in INPUT_CFG["libraries"]]
+	output:
+		gvcf="gatk/DNAseq_SNVs.raw.gvcf.gz",
+		tbi="gatk/DNAseq_SNVs.raw.gvcf.gz.tbi"
+	log:
+		"gatk/log/DNAseq_SNVs.combineGVCF.log"
+	shell:
+		"\n\t\t("+module_load("GenomeAnalysisTK")+
+		"""
+		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx60G"
+		GATK -T CombineGVCFs -R {REFERENCE_CFG[path]}.fa $(printf -- ' --variant %s ' {input.gvcf}) -o {output.gvcf}) >& {log}
+		"""
+
+
+# for wgs/exome data: run HaplotyperCaller and produce gvcf
+rule run_GATK_HaplotypeCaller_wgs:
+	input:
+		bam="bwa/{basename}.variant_calling.bam",
+		bai="bwa/{basename}.variant_calling.bai"
+	output:
+		gvcf=temp("gatk/{basename}.haplotypecaller.gvcf.gz"),
+		tbi=temp("gatk/{basename}.haplotypecaller.gvcf.gz.tbi")
+	log:
+		"gatk/log/{basename}.haplotypecaller.log"
+	threads:
+		8
+	shell:
+		"\n\t\t("+module_load("GenomeAnalysisTK")+
+		"""
+		export JAVA_OPTIONS="-Djava.io.tmpdir=. -Xmx60G"
+		GATK -T HaplotypeCaller -R {REFERENCE_CFG[path]}.fa -I {input.bam} -o {output.gvcf} --emitRefConfidence GVCF --variant_index_type LINEAR --variant_index_parameter 128000 \
+		-nct ${{NSLOTS:-{threads}}} """+("--interval_padding 100 -L "+VARIANT_CALLING_CFG["target_regions_bed"] if VARIANT_CALLING_CFG["target_regions_bed"] else "")+""") >& {log}
+		"""
+
+
+# check the integrity of the vcfs provided for variant recalibration
+rule check_variant_recalibration_vcfs:
+	output:
+		temp("gatk/vcf_integrity_check")
+	log:
+		"gatk/log/vcf_integrity_check.log"
+	priority:
+		10
+	shell:
+		"\n\t\t("+module_load("GenomeAnalysisTK")+
+		"""
+		for vcf in """+(" ".join(set([re.sub('^\S+\s+','',v) for v in VARIANT_CALLING_CFG["snp_recalibration_vcfs"] + VARIANT_CALLING_CFG["indel_recalibration_vcfs"] + [VARIANT_CALLING_CFG["snv_db_vcf"]]])))+""";do GATK -T ValidateVariants -R {REFERENCE_CFG[path]}.fa -V $vcf --validationTypeToExclude ALL;done) 2>&1 | tee {output} >& {log}
+		cp {log} {output}
+		"""
+

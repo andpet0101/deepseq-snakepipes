@@ -1,0 +1,88 @@
+try:
+	GENERAL_SETTINGS_INCLUDED
+except NameError: 
+	include: "general_settings.snakemake"
+
+include: "do_data_cleaning.snakemake"
+
+####################
+# Config/Parameter #
+####################
+
+MITCR_CFG = config.get("mitcr",dict())
+if "preset" not in MITCR_CFG:
+	MITCR_CFG["preset"] = "flex"
+if "chain" not in MITCR_CFG:
+	MITCR_CFG["chain"] = "TRA"
+if "ec" not in MITCR_CFG:
+	MITCR_CFG["ec"] = "2"
+
+###########
+# Targets #
+###########
+
+MITCR_TXT_FILES = ["miTCR/" + s + ".txt" for s in LIBRARIES]
+MITCR_CLS_FILES = ["miTCR/" + s + ".cls" for s in LIBRARIES]
+MITCR_PLOT_FILES = ["miTCR/report/pdf/" + PROJECT + "_" + s for s in ["distribution_of_reads_per_sample_density.pdf","distribution_of_reads_per_sample_freqpoly.pdf","distribution_of_reads_per_sample_histogram.pdf","number_of_sequences_per_sample.pdf","total_reads_per_sample.pdf"]]
+MITCR_TARGETS = MITCR_TXT_FILES + MITCR_CLS_FILES + MITCR_PLOT_FILES + ["miTCR/" + PROJECT + "_percentage_of_reads_used_in_MiTCR.csv","miTCR/" + PROJECT + "_miTCR_analysis.zip"]
+
+#########
+# Rules #
+#########
+
+shell.prefix("set -evuf -o pipefail;")
+ruleorder: make_miTCR_plots > run_miTCR
+localrules: link_miTCR_fastq_files,zip_miTCR_results
+
+
+rule do_miTCR:
+	input:
+		MITCR_TARGETS
+
+rule zip_miTCR_results:
+	input:
+		MITCR_TXT_FILES,
+		MITCR_CLS_FILES,
+		MITCR_PLOT_FILES,
+		"miTCR/"+PROJECT+"_percentage_of_reads_used_in_MiTCR.csv"
+	output:
+		"miTCR/"+PROJECT+"_miTCR_analysis.zip"
+	log:
+		"miTCR/"+PROJECT+"_miTCR_analysis.zip.log"
+	shell:
+		"""
+		(zip {output} {input}) >& {log}
+		"""
+
+rule make_miTCR_plots:
+	input:
+		MITCR_TXT_FILES,
+		MITCR_CLS_FILES
+	output:
+		MITCR_PLOT_FILES,
+		"miTCR/"+PROJECT+"_percentage_of_reads_used_in_MiTCR.csv"
+	log:
+		"miTCR/log/make_miTCR_plots.log"
+	shell:
+		"\n\t\t("+module_load("R")+
+		"""
+		summarise_MiTCR.R {PROJECT} miTCR fastq miTCR/report/pdf) >& {log}
+		"""
+
+rule run_miTCR:
+	input:
+		fq="fastq/{basename}_R1.clean.fastq.gz" if CLEAN_DATA_CFG else "fastq/{basename}_R1.fastq.gz"
+	output:
+		txt="miTCR/{basename}.txt",
+		cls="miTCR/{basename}.cls"
+	log:
+		"miTCR/log/{basename}.log"
+	threads:
+		4
+	shell:
+		"""
+		(java -Xmx1500m -jar /share/apps/mitcr/1.0.3/mitcr.jar -t ${{NSLOTS:-{threads}}} -pset {MITCR_CFG[preset]} -gene {MITCR_CFG[chain]} -ec {MITCR_CFG[ec]} {input} {output.txt}
+		java -Xmx1500m -jar /share/apps/mitcr/1.0.3/mitcr.jar -t ${{NSLOTS:-{threads}}} -pset {MITCR_CFG[preset]} -gene {MITCR_CFG[chain]} -ec {MITCR_CFG[ec]} {input} {output.cls}) >& {log}
+		"""
+
+

@@ -7,9 +7,11 @@ except NameError:
 # Config/Parameter #
 ####################
 
-BAM_FILES = [ALIGNER_CFG["program"] + "/" + s + ".bam" for s in LIBRARIES]
-BAI_FILES = [ALIGNER_CFG["program"] + "/" + s + ".bam.bai" for s in LIBRARIES]
+# info about aligner is needed
+if not ALIGNER_CFG:
+	raise WorkflowError("Please provide an aligner configuration!")
 
+# info about rnaseqc is also needed but can be inferred
 RNASEQC_CFG = config.get("rnaseqc",dict())
 if "gtf" not in RNASEQC_CFG:
 	if SPECIES and ANNOTATION_CFG and "version" in ANNOTATION_CFG and REFERENCE_CFG and "version" in REFERENCE_CFG:
@@ -26,15 +28,23 @@ if "rRNA_list" not in RNASEQC_CFG:
 if not os.path.exists(RNASEQC_CFG["rRNA_list"]):
 	raise WorkflowError("Could not find the rnaseqc.rRNA_list file "+RNASEQC_CFG["rRNA_list"]+"!")
 
+
+# bam and bai files are needed
+BAM_FILES = [ALIGNER_CFG["program"] + "/" + s + ".bam" for s in LIBRARIES]
+BAI_FILES = [ALIGNER_CFG["program"] + "/" + s + ".bam.bai" for s in LIBRARIES]
+
+
 ###########
 # Targets #
 ###########
 
+# files produced
 RNASEQC_FILES = ["gapLengthHist_low.png","index.html","meanCoverage_medium.png","meanCoverageNorm_low.txt","refGene.txt.idx","gapLengthHist_low.txt",
 	"meanCoverage_high.png","meanCoverage_medium.txt","meanCoverageNorm_medium.png","report.html","countMetrics.html","gapLengthHist_medium.png","meanCoverage_high.txt","meanCoverageNorm_high.png",
 	"meanCoverageNorm_medium.txt","gapLengthHist_high.png","gapLengthHist_medium.txt","meanCoverage_low.png","meanCoverageNorm_high.txt","metrics.tsv","gapLengthHist_high.txt","genes.rpkm.gct",
 	"meanCoverage_low.txt","meanCoverageNorm_low.png","refGene.txt"]
 
+# no correlation plots will be produced if there is only one library
 if len(LIBRARIES) > 1:
 	RNASEQC_FILES.extend(["corrMatrixPearson.txt","corrMatrixSpearman.txt"])
 
@@ -47,6 +57,8 @@ RNASEQC_TARGETS = RNASEQC_FILES + ["report/data/"+PROJECT+"_rnaseqc_alignment.cs
 #########
 
 shell.prefix("set -euf -o pipefail;")
+
+# simple rules are run on the head node
 localrules: make_rnaseqc_samplefile,extract_rnaseqc_stats
 
 rule do_rnaseqc:
@@ -64,10 +76,9 @@ rule extract_rnaseqc_stats:
 	log:
 		"rnaseqc/log/extract_rnaseqc_stats.log"
 	shell:
-		module_load("python")+
+		"\n\t\t("+module_load("python")+
 		"""
-		export PYTHONPATH=/group/sequencing/Bfx/scripts/mathias/dsp/dsp/src:$PYTHONPATH
-		/group/sequencing/Bfx/scripts/common/extract_tables_rnaseqc.py -f {input} -b {PROJECT} -r report) >& {log}
+		extract_tables_rnaseqc.py -f {input} -b {PROJECT} -r report) >& {log}
 		"""
 	
 
@@ -83,14 +94,11 @@ rule run_rnaseqc:
 	priority:
 		-1
 	shell:
-		module_load("samtools","rna-seqc")+
+		"\n\t\t("+module_load("samtools","rna-seqc")+
 		"""
+		export JAVA_OPTIONS="-Xmx40G"
 		[ $(samtools view -f 1 -c {input.bams[0]}) -eq 0 ] && PARAM=\" -singleEnd \" || PARAM=\"\"
-		java -Xmx40G -jar /share/apps/RNA-SeQC/1.1.8/RNA-SeQC_v1.1.8.jar -gatkFlags \"-S SILENT\" \
-		-o rnaseqc -r {REFERENCE_CFG[path]}.fa \
-		-s {input.samplefile} $PARAM \
-		-t {RNASEQC_CFG[gtf]} \
-		-rRNA {RNASEQC_CFG[rRNA_list]} || true) >& {log}
+		RNA-SeQC -gatkFlags "-S SILENT" -o rnaseqc -r {REFERENCE_CFG[path]}.fa -s {input.samplefile} $PARAM -t {RNASEQC_CFG[gtf]} -rRNA {RNASEQC_CFG[rRNA_list]} || true) >& {log}
 		"""
 
 rule make_rnaseqc_samplefile:
