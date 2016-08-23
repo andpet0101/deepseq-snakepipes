@@ -12,14 +12,14 @@
 	{
 		"runtime" : "48:00:00",
 		"memory" : "40G",
-		"cpu" : "8-10",
+		"cpu" : "8-20",
 		"other_resources" : "sse42"
 	},
 	"run_gsnap_paired" :
 	{
 		"runtime" : "48:00:00",
 		"memory" : "40G",
-		"cpu" : "8-12",
+		"cpu" : "8-20",
 		"other_resources" : "sse42"
 	},
 	"run_bwa_single" :
