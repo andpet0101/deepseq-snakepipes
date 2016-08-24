@@ -133,13 +133,13 @@ if(length(arguments)!=3){
 	stop("Needs the bfx id, the data directory and the pdf directory as arguments\n", call.=FALSE)
 }
 
-#bfx_id = arguments[1]
-#data_directory = arguments[2]
-#pdf_directory = arguments[3]
+bfx_id = arguments[1]
+data_directory = arguments[2]
+pdf_directory = arguments[3]
 
-bfx_id = "nobfx"
-data_directory = "miRNA/report/data"
-pdf_directory = "/home/sequencing/andreasp/Desktop"
+#bfx_id = "nobfx"
+#data_directory = "miRNA/report/data"
+#pdf_directory = "/home/sequencing/andreasp/Desktop"
 
 #########################################
 # 1. plot initial genomic mapping rates #
