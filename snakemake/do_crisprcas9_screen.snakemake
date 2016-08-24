@@ -1,3 +1,20 @@
+1. 
+module load apps/cutadapt
+
+cutadapt -a GTTTTAGAGCTAGAAATAGC -O 20 -e 0.05 L11704_L929_K_R1.fastq.gz |  cutadapt -a GTTTTAGAGCTAGAAATAGC -O 20 -e 0.05 GTGGAAAGGACGAAACACCG - > L11704_L929_K_R1.trimmed.fastq
+cutadapt -a GTTTTAGAGCTAGAAATAGC -O 20 -e 0.05 L11705_L929_TZ_R1.fastq |  cutadapt -a GTTTTAGAGCTAGAAATAGC -O 20 -e 0.05 GTGGAAAGGACGAAACACCG - > L11705_L929_TZ_R1.trimmed.fastq
+
+
+# the set of sgRNAs
+ls GeCKOv2-A_library.fa
+# the set of sgRNA contructs consisting of sequencing primer, sgRNA and chRNA (see above)
+# names must match to the set of sgRNAs
+ls GeCKOv2-A_library.contructs.fa
+
+bowtie-build GeCKOv2-A_library.contructs.fa GeCKOv2-A_library.contructs
+/group/sequencing/Bfx/scripts/andreasp/convert_sgRNA_seq_data_to_pseudo_sgRNA_reads.pl L11704_L929_K_R1.trimmed.fastq GeCKOv2-A_library.contructs GeCKOv2-A_library.fa > L11704_L929_K_R1.clean.fastq
+/group/sequencing/Bfx/scripts/andreasp/convert_sgRNA_seq_data_to_pseudo_sgRNA_reads.pl L11705_L929_TZ_R1.trimmed.fastq GeCKOv2-A_library.contructs GeCKOv2-A_library.fa > L11705_L929_TZ_R1.clean.fastq
+
 try:
 	GENERAL_SETTINGS_INCLUDED
 except NameError: 
@@ -19,6 +36,56 @@ postprocess_config(config)
 rule all:
     input:
         expand("results/{experiment}.vispr.yaml", experiment=config["experiments"])
+
+rule convert_sgRNA_reads_using_gecko_library:
+	input:
+		fq="fastq/{basename}.trimmed.fastq.gz",
+		constructs_index=""
+
+	output:
+		"fastq/{basename}.clean.fastq.gz"
+	log:
+		"fastq/log/{basename}.remove_gecko_adapters.log"
+	shell:
+		"\n\t\t("+module_load("bowtie")+
+		"""
+		convert_sgRNA_reads_using_gecko_library.pl {input.fq} {input.constructs_bwt} {input.library} | gzip -c > {output}) >& {log}
+		"""
+
+rule remove_gecko_adapters:
+	input:
+		"fastq/{basename}.fastq.gz"
+	output:
+		"fastq/{basename}.trimmed.fastq.gz"
+	log:
+		"fastq/log/{basename}.remove_gecko_adapters.log"
+	shell:
+		"\n\t\t("+module_load("cutadapt")+
+		"""
+		cutadapt -a GTTTTAGAGCTAGAAATAGC -O 20 -e 0.05 {input} | cutadapt -O 20 -e 0.05 -g GTGGAAAGGACGAAACACCG - | gzip -c > {output}) >& {log}
+		"""
+
+rule create_constructs_index:
+	
+
+
+    
+rule mageck_count:
+	input:
+		fastqs=[get_fastq(rep, config) for rep in config["replicates"]],
+		library=config["library"]
+	output:
+		"mageck/count/all.count.txt",
+		"mageck/count/all.count_normalized.txt",
+		"mageck/count/all.countsummary.txt"
+	log:
+		"mageck/log/count/all.log"
+        shell:
+            "mageck count --output-prefix {params.prefix} "
+            "--list-seq {input.library} --pdf-report "
+            "--fastq {params.fastqs} --sample-label {params.labels} "
+            "--trim-5 {config[sgrnas][trim-5]} 2> {log}"
+
 
 if "samples" in config:
     rule fastqc:

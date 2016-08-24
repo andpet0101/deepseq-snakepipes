@@ -32,8 +32,6 @@ if CLEAN_DATA_CFG:
 	elif "umi_libs" not in CLEAN_DATA_CFG and "umi_trim" not in CLEAN_DATA_CFG:
 		CLEAN_DATA_CFG["umi_libs"] = 0
 		CLEAN_DATA_CFG["umi_trim"] = 0
-else:
-	raise WorkflowError("Please specify a clean_data configuration!")
 
 
 

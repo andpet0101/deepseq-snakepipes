@@ -41,7 +41,7 @@ umask(002);
 # options and help
 if(scalar(@ARGV)==0){
 	help();	
-	exit(0);
+	# exits automatically
 }
 
 my ($workflow,$snakefile,$configfile,$cluster_configfile,$description,$jobscript) = ("","","","","","");
@@ -54,7 +54,7 @@ my $show_snakemake_options = 0;
 my $send_mail = "";
 
 GetOptions('help|h' => \&help,
-	'full_help' => \&full_help,
+	'snakemake_help' => \&snakemake_help,
 	'workflow=s' => \$workflow,
 	'snakefile|s=s' => \$snakefile,
 	'configfile=s' => \$configfile,
@@ -279,11 +279,12 @@ sub help{
 		print "     none\n";
 	}
 	print "\n";
+
+	exit(0);
 }
 
 
-sub full_help{
-	help();
+sub snakemake_help{
 	print "==============================================================================================================\n";
 	print "These are the settings available for snakemake. All specified settings are passed directly to the program call\n";
 	print "and will overwrite any settings made by the wrapper script.\n";
