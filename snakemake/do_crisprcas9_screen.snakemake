@@ -40,7 +40,7 @@ rule all:
 rule convert_sgRNA_reads_using_gecko_library:
 	input:
 		fq="fastq/{basename}.trimmed.fastq.gz",
-		constructs_index=""
+		constructs_bwt=""
 
 	output:
 		"fastq/{basename}.clean.fastq.gz"
@@ -65,8 +65,18 @@ rule remove_gecko_adapters:
 		cutadapt -a GTTTTAGAGCTAGAAATAGC -O 20 -e 0.05 {input} | cutadapt -O 20 -e 0.05 -g GTGGAAAGGACGAAACACCG - | gzip -c > {output}) >& {log}
 		"""
 
-rule create_constructs_index:
+rule create_constructs_bwt_index:
+	output:
+		"fastq/"
+	shell:
+		"""
+		"""
 	
+
+
+
+
+
 
 
     

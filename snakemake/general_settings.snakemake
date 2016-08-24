@@ -215,7 +215,7 @@ def module_load(*modules):
 #########
 
 # path for scripts
-os.environ['PATH'] = "/group/sequencing/Bfx/scripts/andreasp/scripts:/group/sequencing/Bfx/scripts/andreasp/R:/group/sequencing/Bfx/scripts/common:"+os.environ['PATH']
+os.environ['PATH'] = "/group/sequencing/Bfx/scripts/andreasp/deepseq-snakepipes/scripts:/group/sequencing/Bfx/scripts/andreasp/deepseq-snakepipes/R:/group/sequencing/Bfx/scripts/common:"+os.environ['PATH']
 if "PYTHONPATH" in os.environ:
 	os.environ['PYTHONPATH'] = "/group/sequencing/Bfx/scripts/mathias/dsp/dsp/src:"+os.environ['PYTHONPATH']
 else:
