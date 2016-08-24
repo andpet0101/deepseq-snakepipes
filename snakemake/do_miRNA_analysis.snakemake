@@ -199,7 +199,7 @@ rule create_otherRNA_genomic_filter_bed:
 	log:
 		"miRNA/log/create_otherRNA_genomic_filter_bed.log"
 	shell:
-		"\n\t\t("+module_load("bedtools","cufflinks")+
+		"\n\t\t("+module_load("bedtools","cufflinks","perl")+
 		"""
 		cat {ANNOTATION_CFG[gtf]} | egrep 'gene_biotype "(Mt_rRNA|Mt_tRNA|rRNA|scaRNA|snoRNA|snRNA|sRNA|protein_coding)"' | \
 		gffread -o- -F - | perl -pe 's/[^\\t]+;gene_biotype=([^;]+);[^\\t\\n]+/$1/' | awk '$3=="transcript"{{OFS="\\t";print $1,$4,$5,$9,$6,$7}}' | bedtools merge -c 4,5,6 -o first,first,first | \
