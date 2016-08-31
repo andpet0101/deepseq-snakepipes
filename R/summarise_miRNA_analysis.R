@@ -8,7 +8,7 @@ library(tidyr)
 library(scales)
 library(VennDiagram)
 library(gtools)
-library(GRanges)
+library(GenomicRanges)
 
 #############
 # Functions #
