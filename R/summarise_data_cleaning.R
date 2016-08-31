@@ -21,6 +21,10 @@ bfx_id = arguments[1]
 data_directory = arguments[2]
 pdf_directory = arguments[3]
 
+#bfx_id = "bfx657"
+#data_directory = "fastq/report/data"
+#pdf_directory = "fastq/report/pdf"
+
 #############
 # Functions #
 #############
@@ -210,6 +214,18 @@ plotCorrelation <- function(deseqmatrix, conditions = "", cormethod = "pearson",
   }
 }
 
+# fixes library names
+fixLibraryNames = function(library_names){
+	library_names_wo_bfx = as.character(gsub("^bfx\\d+_","",library_names))
+	library_names_wo_bfx_lib = as.character(gsub("^L\\d+_","",library_names_wo_bfx))
+	
+	if(length(unique(library_names_wo_bfx))==length(unique(library_names_wo_bfx_lib))){
+		library_names_wo_bfx_lib
+	}else{
+		library_names_wo_bfx
+	}
+}
+
 
 ########
 # Main #
@@ -220,6 +236,8 @@ cutadapt_files = list.files(path=data_directory,pattern=".cutadapt.txt$",full.na
 
 # short side remark: trying to convert from plyr -> dplyr but apparently there is no ldply equivalent in dplyr
 cutadapt_summary = ldply(cutadapt_files,function(x){parse_cutadapt_summary(x)})
+library_names = fixLibraryNames(cutadapt_summary$library)
+cutadapt_summary$library = factor(library_names,levels=unique(library_names))
 trimming_summary = cutadapt_summary
 
 # if available, read in umi files - only process if there is at least one nonempty file
@@ -229,6 +247,8 @@ have_umi_data = length(umi_files)>0 & sum(file.size(umi_files))>0
 
 if(have_umi_data){
 	umi_summary = ldply(umi_files,function(x){parse_umi_summary(x)})
+	library_names = fixLibraryNames(umi_summary$library)
+	umi_summary$library = factor(library_names,levels=unique(library_names))
 	umi_summary$too_short_umi = umi_summary$too_short
 	umi_summary$total_reads = NULL
 	umi_summary$too_short = NULL
@@ -259,7 +279,8 @@ geom_bar(stat="identity") +
 theme_bw() +
 scale_x_discrete("Library") +
 scale_y_continuous("Number of reads",label=comma) +
-theme(axis.text.x=element_text(angle=45,vjust = 1, hjust=1))
+theme(axis.text.x=element_text(angle=45,vjust = 1, hjust=1)) +
+ggtitle("Sequenced reads")
 ggsave(paste(pdf_directory,paste(bfx_id,"input_reads.pdf",sep="_"),sep="/"),input_data_reads_plot)
 
 # plot bp input data
@@ -268,7 +289,8 @@ geom_bar(stat="identity") +
 theme_bw() +
 scale_x_discrete("Library") +
 scale_y_continuous("Total sequence data in Mb",label=Mb_labels) +
-theme(axis.text.x=element_text(angle=45,vjust = 1, hjust=1))
+theme(axis.text.x=element_text(angle=45,vjust = 1, hjust=1)) +
+ggtitle("Sequenced bps")
 ggsave(paste(pdf_directory,paste(bfx_id,"input_bp.pdf",sep="_"),sep="/"),input_data_bp_plot)
 
 
@@ -281,7 +303,8 @@ theme_bw() +
 scale_x_discrete("Library") +
 scale_y_continuous("Percentage of reads",label=percent) +
 scale_fill_brewer("Read status",type="qual",palette=2,labels=c("passed","filtered")) +
-theme(axis.text.x=element_text(angle=45,vjust = 1, hjust=1))
+theme(axis.text.x=element_text(angle=45,vjust = 1, hjust=1)) +
+ggtitle("Reads removed after data cleaning")
 ggsave(paste(pdf_directory,paste(bfx_id,"reads_removed.pdf",sep="_"),sep="/"),read_fate_plot)
 
 
@@ -294,7 +317,8 @@ theme_bw() +
 scale_x_discrete("Library") +
 scale_y_continuous("Percentage of bp",label=percent) +
 scale_fill_brewer("Bp status",type="qual",palette=2,labels=c("passed","filtered")) +
-theme(axis.text.x=element_text(angle=45,vjust = 1, hjust=1))
+theme(axis.text.x=element_text(angle=45,vjust = 1, hjust=1)) +
+ggtitle("Bps removed after data cleaning")
 ggsave(paste(pdf_directory,paste(bfx_id,"bp_removed.pdf",sep="_"),sep="/"),bp_fate_plot)
 
 # read fate plot (complex)
@@ -307,7 +331,8 @@ theme_bw() +
 scale_x_discrete("Library") +
 scale_y_continuous("Percentage of reads",label=percent) +
 scale_fill_brewer("Read status",type="qual",palette=2,labels=c("passed","without adapter","too short/primer dimer","without UMI")) +
-theme(axis.text.x=element_text(angle=45,vjust = 1, hjust=1))
+theme(axis.text.x=element_text(angle=45,vjust = 1, hjust=1)) +
+ggtitle("Reads removed by reason")
 ggsave(paste(pdf_directory,paste(bfx_id,"reads_removed_by_cause.pdf",sep="_"),sep="/"),read_complex_fate_plot)
 
 # plot length distribution
@@ -318,21 +343,29 @@ length_dist_table = ldply(length_dist_files,function(file){
 	length_table$library = gsub('_R\\d$','',gsub('\\.length_distribution\\.txt$','',basename(file)))
 	length_table
 })
-
+library_names = fixLibraryNames(length_dist_table$library)
+length_dist_table$library = factor(library_names,levels=unique(library_names))
 
 length_dist_table = length_dist_table[,c("library","dir","length","reads")]
 length_dist_table =  length_dist_table %>% 
 			group_by(library) %>% mutate(frac_reads=reads/sum(reads)) %>%
 			as.data.frame()
 
+num_columns = 4
+
 length_dist_plot = ggplot(length_dist_table,aes(x=length,y=frac_reads)) +
 geom_bar(stat="identity",colour="black",fill="black") +
 theme_bw() +
 scale_x_continuous("Read length in bp",limits=c(min(length_dist_table$length),max(length_dist_table$length))) +
 scale_y_continuous("Fraction of reads") +
-facet_wrap(~ library,scales="free_x",ncol=3)
+facet_wrap(~ library,scales="free_x",ncol=num_columns) +
+ggtitle("Length distribution of clean reads")
 
-ggsave(paste(pdf_directory,paste(bfx_id,"clean_reads_length_distribution.pdf",sep="_"),sep="/"),length_dist_plot,width=10,height=7)
+required_width = 11/4*num_columns
+required_height = 6.5/3*ceiling(length(levels(length_dist_table$library))/num_columns)
+
+
+ggsave(paste(pdf_directory,paste(bfx_id,"clean_reads_length_distribution.pdf",sep="_"),sep="/"),length_dist_plot,width=required_width,height=required_height)
 
 
 # plot umi distribution
@@ -344,6 +377,9 @@ if(have_umi_data){
 		distribution_table$library = gsub('\\.umi\\.csv\\.gz$','',basename(file))
 		distribution_table
 	})
+	library_names = fixLibraryNames(umi_distribution_table$library)
+	umi_distribution_table$library = factor(library_names,levels=unique(library_names))
+
 	
 	umi_distribution_table = umi_distribution_table[,c("library","UMI","count")]
 	umi_distribution_table = umi_distribution_table %>% 
@@ -363,11 +399,13 @@ if(have_umi_data){
 	theme_bw() +
 	scale_x_discrete("UMI normalised count (rpm)",labels=c("All","0-10","11-100","101-1000",">1000")) +
 	scale_y_continuous("Number of UMIs",labels=comma) +
-	scale_fill_discrete("Library")
-	ggsave(paste(pdf_directory,paste(bfx_id,"umi_summary.pdf",sep="_"),sep="/"),umi_distribution_summary_plot)
+	scale_fill_discrete("Library") +
+	ggtitle("UMI distribution") +
+	theme(legend.position="bottom")
+	ggsave(paste(pdf_directory,paste(bfx_id,"umi_summary.pdf",sep="_"),sep="/"),umi_distribution_summary_plot,width=9,height=8)
 
-	ggplot(umi_distribution_table,aes(x=count,colour=library)) + 
-	geom_freqpoly(binwidth=10) + scale_x_continuous(limits=c(0,300))
+	#ggplot(umi_distribution_table,aes(x=count,colour=library)) + 
+	#geom_freqpoly(binwidth=10) + scale_x_continuous(limits=c(0,300))
 	
 	# rank plot
 	num_top = 1000
@@ -385,19 +423,11 @@ if(have_umi_data){
 	theme_bw() +
 	scale_x_continuous("UMI Rank") +
 	scale_y_continuous("UMI normalised count (rpm)") +
-	scale_colour_discrete("Library")
-	ggsave(paste(pdf_directory,paste(bfx_id,"umi_ranked_top_counts.pdf",sep="_"),sep="/"),umi_rank_plot)
-
-	umi_rank_10_plot = ggplot(top_per_library,aes(x=rank,y=norm_count,colour=library)) +
-	geom_line() +
-	theme_bw(10) +
-	scale_x_continuous("UMI Rank",limits=c(0,10),breaks=0:10) +
-	scale_y_continuous("UMI normalised count (rpm)") +
 	scale_colour_discrete("Library") +
-	theme(legend.position="none")
+	ggtitle("UMI ranked by occurrence (high to low)") +
+	theme(legend.position="bottom")
+	ggsave(paste(pdf_directory,paste(bfx_id,"umi_ranked_top_counts.pdf",sep="_"),sep="/"),umi_rank_plot,width=9,height=8)
 
-	umi_adv_rank_plot = umi_rank_plot + 
-	annotation_custom(ggplot_gtable(ggplot_build(umi_rank_10_plot)),xmin=0.3*num_top,ymin=0.5*max(top_per_library$norm_count),xmax=num_top,ymax=max(top_per_library$norm_count))
 
 	# correlation plot (only spearman rank correlation)
 	umi_distribution_table_w = spread(umi_distribution_table[,c("library","UMI","norm_count")],library,norm_count,fill=0)

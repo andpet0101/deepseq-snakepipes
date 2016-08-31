@@ -18,7 +18,7 @@ include: "do_deg_analysis.snakemake"
 # Targets #
 ###########
 
-DOC_TARGETS = ["report/"+PROJECT+"_figure-report-config.csv","report/"+PROJECT+"_build_report.sh"]
+DOC_TARGETS = ["report/"+PROJECT+"_figure-report-config.csv","report/"+PROJECT+"_build_report.sh","report/"+PROJECT+"_program_versions.csv"]
 
 #########
 # Rules #
@@ -55,5 +55,19 @@ rule build_rnaseq_report_script:
 			outstream.write("/group/sequencing/Bfx/scripts/common/build_report.py -r . -b " + PROJECT + " -d ../de-analysis/" + PROJECT + ".deseq-results-padj.none.csv")
 			outstream.write(" -l " + PROJECT + "_labels.csv -t projects/" + PROJECT + " -s " + SPECIES + " -e " + ANNOTATION_CFG["version"] + "\n")
 
+rule collect_program_versions:
+	input:
+		CLEAN_DATA_TARGETS,
+		MAPPING_TARGETS,
+		FASTQC_TARGETS,
+		RNASEQC_TARGETS,
+		GENECOUNTS_TARGETS,
+		DESEQ_TARGETS
+	output:
+		"report/"+PROJECT+"_program_versions.csv"
+	shell:
+		"""
+		find . -name '*.log' -exec grep '^/apps' {{}} \; | sed 's|/apps/||;s|/| |' | sort | uniq | awk 'BEGIN{{OFS="\\t";print "program","version","last modified"}}{{print $1,$2,$3}}' > {output}
+		"""
 
 
