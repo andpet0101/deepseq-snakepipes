@@ -8,6 +8,18 @@
 		"cpu" : "2",
 		"other_resources" : "\"\""
 	},
+	"run_bcl2fastq" :
+	{
+		"runtime" : "24:00:00",
+		"memory" : "40G",
+		"cpu" : "12-20"
+	},
+	"run_fastqcdemultiplex" :
+	{
+		"runtime" : "24:00:00",
+		"memory" : "40G",
+		"cpu" : "12-20"
+	},
 	"run_gsnap_single" :
 	{
 		"runtime" : "48:00:00",
@@ -41,7 +53,9 @@
 	},
 	"run_featureCounts" :
 	{
-		"cpu" : "8"	
+		"cpu" : "8",
+		"memory" : "40G",
+		"runtime" : "12:00:00"
 	},
 	"run_miTCR" :
 	{
@@ -173,4 +187,3 @@
 		"memory" : "16G"	
 	}
 }
-

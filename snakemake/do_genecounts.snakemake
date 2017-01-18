@@ -78,7 +78,7 @@ rule run_featureCounts:
 		"\n\t\t("+module_load("subread","samtools")+
 		"""
 		[ $(samtools view -f 1 -c {input.bams[0]}) -eq 0 ] && PARAM=\"\" || PARAM=\" -p -C \"		
-		featureCounts -a {ANNOTATION_CFG[gtf]} -s {STRAND} $PARAM -o {output.table} --primary -Q 1 -T ${{NSLOTS:-{threads}}} {input.bams}) >& {log}
+		featureCounts -a {ANNOTATION_CFG[gtf]} -s {STRAND} $PARAM -o {output.table} --primary -Q 1 -T ${{NSLOTS:-{threads}}} --tmpDir {TMP_DIR} {input.bams}) >& {log}
 		cp {log} {output.out}		
 		sed -i.original -e '2s/{ALIGNER_CFG[program]}\/L[0-9]\+_//g;  2s/\.bam//g' {output.table}
 		sed -i.original -e 's/{ALIGNER_CFG[program]}\/L[0-9]\+_//g; s/\.bam//g' {output.summary}
