@@ -1,0 +1,52 @@
+# This is a example for the yml file of the demultiplexing
+# Change it accordingly for the flowcell you want to demultiplex
+# The name of the file has to be snakemake_config_bcl2fastq.yml
+
+# Path to a directory which includes the samplesheet (as csv) files which means this path must exists!
+# The directories name has to be the name of the flowcell which you demultiplex because
+# the script uses this last bit as id for the flowcell
+# Furthermore, the path (here .../FCpipelining/HiSeq/... ) determines where the sequencing folder of the flowcell
+# lies (in this case /projects/sequencing/illumina1)
+#samplesheethome: /group/sequencing/Samples_Material/FCpipelining/HiSeq/170106_7001024F_0473_AC9YP2ACXX
+
+# This is built by default from the samplesheethome. You don't need to set it (leave it in comments). But it can be set manually too (uncomment).
+#sequencing: 
+# This is set by default to /projects/seq-work/fq_storage/. You don't need to set it (leave it in comments). But it can be set manually too (uncomment).
+#fq_storage:
+# This is set by default to /projects/seq-work/pipelining/. You don't need to set it (leave it in comments). But it can be set manually too (uncomment).
+#pipelining:
+# This is the version of the bcl2fastq script. It has to be the version is which is listed via the module avail command on the cluster
+#bcl2fastqversion: 2.17.1.14
+
+# bcl is the start of a dictionary of Samplesheet entries. 
+# Each entries corresponds to a samplesheet the name is the file name of the samplesheet without the extension (here FC473-C9YP2ACXX.lane1-4)
+# mismatches provides the number of mismatches for the demultiplexing (it's either 0 or 1)
+# basesmask provides the schematic which cycles should be used; one can list more than one if lane are demultiplexed differently (the separator has to be a ;)
+# e.g. Y76,I8n,I8n will do a demultiplexing on all given lanes in the samplesheet
+# always list the single lanes first and the scheme for remaining lanes last
+# e.g. 7:Y76,I6n3,I8n;Y76,I8n,I8n will do a demultiplexing one lane 7 with I6n3 and the other lanes will be done with I8n
+# additional provides additional option for the bcl2fastq script. If you don't have additional option, don't write it
+#bcl:
+    #FC473-C9YP2ACXX.lane1-4:
+    #mismatches: 1
+    #basesmask: Y76,I8n,I8n
+    #additional:
+
+
+# Here is fully working example (if the flowcell exists) for a flowcell which has two demultiplexing runs. One is for lane 1-4 and it's a
+# single-read dual-index run and the other is for lane 5-8 and it's a single-read single-index run where the second
+# index is not demultiplexed.
+samplesheethome: /group/sequencing/Samples_Material/FCpipelining/NextSeq/170116_NS500762_0031_AHLGF3BGXY
+bcl2fastqversion: 2.17.1.14
+bcl:
+  FC031-HLGF3BGXY:
+    mismatches: 1
+    basesmask: Y26,I8,Y58
+
+#samplesheethome: /path/to/samplesheet/directory
+#bcl2fastqversion: 2.17.1.14
+#bcl:
+  #samplesheet_name_1:
+    #mismatches: 1
+    #basesmask: Y76,I8n
+
