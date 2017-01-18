@@ -47,7 +47,7 @@ MAPPING_TARGETS = [BAM_FILES,BAI_FILES,MAPPING_PLOTS_FILES]
 
 shell.prefix("set -euf -o pipefail;")
 
-# paired mapping supersedes single mapping
+# paired mapping supercedes single mapping
 ruleorder: run_gsnap_paired > run_gsnap_single
 ruleorder: run_bwa_paired > run_bwa_single
 
@@ -65,6 +65,7 @@ rule make_mapping_plots:
 	shell:
 		"\n\t\t("+module_load("python","R")+
 		"""
+		touch {MAPPING_PLOTS_FILES}
 		figures_mappingstatistics.py -i {ALIGNER_CFG[program]}/report/data -r {ALIGNER_CFG[program]}/report -s """ + ("Complete Gene" if CALC_GENE_COMPLEXITY==1 else "Complete")  + """ -b {PROJECT}) >& {log}
 		"""
 

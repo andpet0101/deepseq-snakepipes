@@ -153,7 +153,8 @@ rule map_filtered_miRNA_fastq_on_genome:
 	input:
 		fq="miRNA/{basename}_R1.filtered.fastq.gz"
 	output:
-		bam=temp("miRNA/{basename}.filtered.bam"),
+		bam="miRNA/{basename}.filtered.bam",
+		bai="miRNA/{basename}.filtered.bam.bai",
 		summary="miRNA/report/data/"+PROJECT+"_{basename}.filtered_mapping.txt"
 	log:
 		"miRNA/log/{basename}.map_filtered_miRNA_fastq_on_genome.log"
@@ -165,7 +166,7 @@ rule map_filtered_miRNA_fastq_on_genome:
 		RG="{wildcards.basename}";LB="{wildcards.basename}";SM="{wildcards.basename}"
 		if [[ "{wildcards.basename}" =~ ^(L[0-9]+)_(.+) ]];then LB="${{BASH_REMATCH[1]}}";SM="${{BASH_REMATCH[2]}}";fi
 		gunzip -cd {input.fq} | {ALIGNER_CFG[binary]} -l 15 -v 2 -e 999 --nomaqround --best --strata -a -m 100 --chunkmbs 256 -p ${{NSLOTS:-{threads}}} -S --sam-RG ID:$RG --sam-RG LB:$LB --sam-RG SM:$SM {ALIGNER_CFG[index_directory]}/{ALIGNER_CFG[index]} - | \
-		samtools sort -O bam -T ${{TMPDIR:-.}}/{wildcards.basename} -o {output.bam} -@ 2 -) 2>&1 | tee {output.summary} >& {log}
+		samtools sort -O bam -T ${{TMPDIR:-.}}/{wildcards.basename} -o {output.bam} -@ 2 -;samtools index {output.bam}) 2>&1 | tee {output.summary} >& {log}
 		"""
 
 

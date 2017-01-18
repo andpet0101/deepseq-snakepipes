@@ -11,13 +11,40 @@ library(gtools)
 library(GenomicRanges)
 
 #############
+# arguments #
+#############
+
+arguments = commandArgs(trailingOnly = F)
+# get path to script
+script_index = grep("--file",arguments)
+script_dir = dirname(sub("--file=","",arguments[script_index]))
+# get rid of leading arguments
+arguments_length = length(arguments)
+arguments_index = grep("--args",arguments)[1]
+if(is.na(arguments_index)){
+	arguments_index=arguments_length
+} else{
+	arguments_index=arguments_index+1
+}
+arguments = arguments[arguments_index:arguments_length]
+
+if(length(arguments)!=3){
+	stop("Needs the bfx id, the data directory and the pdf directory as arguments\n", call.=FALSE)
+}
+
+bfx_id = arguments[1]
+data_directory = arguments[2]
+pdf_directory = arguments[3]
+
+#bfx_id = "bfx700"
+#data_directory = "miRNA/report/data"
+#pdf_directory = "miRNA/report/pdf"
+
+#############
 # Functions #
 #############
 
-bp_labels = function(l){format(big.mark=",",l)}
-kb_labels = function(l,r=0){format(big.mark=",",round(l/1000,r))}
-Mb_labels = function(l,r=0){format(big.mark=",",round(l/1000000,r))}
-Gb_labels = function(l,r=0){format(big.mark=",",round(l/1000000000,r))}
+source(paste(script_dir,"functions_settings.R",sep="/"))
 
 # parses the bowtie logs
 parse_bowtie_log = function(bowtie_log){
@@ -57,104 +84,6 @@ parse_bowtie_log = function(bowtie_log){
 	bowtie_summary
 }
 
-
-# from Matthias' DESeq methods
-plotCorrelation <- function(deseqmatrix, conditions = "", cormethod = "pearson", cluster = FALSE, filename = "") {
-  require(pheatmap)
-  require(RColorBrewer)
-  
-  cormatrix <- cor(deseqmatrix, use = "pairwise.complete.obs", method = cormethod)
-  cornumbers <- round(cormatrix, 3)
-  # colnames(cormatrix) <- NULL
-  if (cormethod == "pearson") {
-    colors <- colorRampPalette(brewer.pal(8, "Blues"))(255)
-    title <- "Pearson Correlation"  
-  }
-  if (cormethod == "spearman") {
-    colors <- colorRampPalette(brewer.pal(8, "Reds"))(255)
-    title <- "Spearman Correlation"
-  }
-  clust <- ifelse(cluster, TRUE, FALSE)
-  
-  if (!is.data.frame(conditions)) {
-    conditions <- NA
-  }
-  
-  cols <- ncol(cormatrix)
-  if (cols <= 10) {
-    fontsize <- 8
-    pheatmap(cormatrix,
-             cluster_rows = clust, cluster_cols = clust,
-             color=colors, annotation_col = conditions,
-             main = title, border_color = NA,
-             fontsize = fontsize, fontsize_row = fontsize+2, fontsize_col = fontsize+2,
-             fontsize_number = fontsize+1,
-             # cellwidth = 20, cellheight = 20,
-             display_numbers = cornumbers, number_color = "Black",
-             filename = filename
-    )
-  } else if((10 < cols) & (cols <= 20)) {
-    fontsize <- 7
-    pheatmap(cormatrix,
-             cluster_rows = clust, cluster_cols = clust,
-             color=colors, annotation_col = conditions,
-             main = title, border_color = NA,
-             fontsize = fontsize, fontsize_row = fontsize, fontsize_col = fontsize,
-             fontsize_number = 0.9 * fontsize,
-             cellwidth = 20, cellheight = 20,
-             display_numbers = cornumbers, number_color = "Black",
-             filename = filename
-    )
-  } else if(cols > 20) {
-    fontsize <- 4
-    pheatmap(cormatrix, 
-             cluster_rows = clust, cluster_cols = clust,
-             color=colors, annotation_col = conditions,
-             main = title, border_color = NA,
-             fontsize = fontsize, fontsize_row = fontsize, fontsize_col = fontsize,
-             cellwidth = 20, cellheight = 20,
-             display_numbers = F,
-             filename = filename
-    )
-  }
-}
-
-# fixes library names
-fixLibraryNames = function(library_names){
-	library_names_wo_bfx = as.character(gsub("^bfx\\d+_","",library_names))
-	library_names_wo_bfx_lib = as.character(gsub("^L\\d+_","",library_names_wo_bfx))
-	
-	if(length(unique(library_names_wo_bfx))==length(unique(library_names_wo_bfx_lib))){
-		library_names_wo_bfx_lib
-	}else{
-		library_names_wo_bfx
-	}
-}
-
-# colour brewer palette for 24 samples
-color_brewer_qual_palette = c("#a6cee3","#1f78b4","#b2df8a","#33a02c","#fb9a99","#e31a1c","#fdbf6f","#ff7f00","#cab2d6","#6a3d9a","#ffff99","#b15928","#8dd3c7","#ffffb3",
-"#bebada","#fb8072","#80b1d3","#fdb462","#b3de69","#fccde5","#d9d9d9","#bc80bd","#ccebc5","#ffed6f")
-
-# repeat 100 times = 2400 samples max
-color_brewer_qual_palette = rep(color_brewer_qual_palette,100)
-
-########
-# Main #
-########
-
-arguments = commandArgs(trailingOnly = TRUE)
-if(length(arguments)!=3){
-	stop("Needs the bfx id, the data directory and the pdf directory as arguments\n", call.=FALSE)
-}
-
-bfx_id = arguments[1]
-data_directory = arguments[2]
-pdf_directory = arguments[3]
-
-bfx_id = "bfx657"
-data_directory = "miRNA/report/data"
-pdf_directory = "miRNA/report/pdf"
-
 #########################################
 # 1. plot initial genomic mapping rates #
 #########################################
@@ -190,25 +119,41 @@ ggsave(paste(bfx_id,"unfiltered_reads_genomic_mapping2.pdf",sep="_"),path=pdf_di
 tRNA_filter_files = list.files(path=data_directory,pattern="\\.tRNA.txt$",full.names=TRUE)
 tRNA_len_table = ldply(tRNA_filter_files,function(file){
 	length_table = read.table(file,header=T,sep="\t",stringsAsFactors=F)
-	length_table$library = gsub('_R\\d$','',gsub('\\.\\S+$','',basename(file)))
+	if(nrow(length_table)>0){
+		length_table$library = gsub('_R\\d$','',gsub('\\.\\S+$','',basename(file)))
+	}else{
+		length_table$library = c()	
+	}
 	length_table
 })
 rRNA_filter_files = list.files(path=data_directory,pattern="\\.rRNA.txt$",full.names=TRUE)
 rRNA_len_table = ldply(rRNA_filter_files,function(file){
 	length_table = read.table(file,header=T,sep="\t",stringsAsFactors=F)
-	length_table$library = gsub('_R\\d$','',gsub('\\.\\S+$','',basename(file)))
+	if(nrow(length_table)>0){
+		length_table$library = gsub('_R\\d$','',gsub('\\.\\S+$','',basename(file)))
+	}else{
+		length_table$library = c()	
+	}
 	length_table
 })
 otherRNA_filter_files = list.files(path=data_directory,pattern="\\.otherRNA.txt$",full.names=TRUE)
 otherRNA_len_table = ldply(otherRNA_filter_files,function(file){
 	length_table = read.table(file,header=T,sep="\t",stringsAsFactors=F)
-	length_table$library = gsub('_R\\d$','',gsub('\\.\\S+$','',basename(file)))
+	if(nrow(length_table)>0){
+		length_table$library = gsub('_R\\d$','',gsub('\\.\\S+$','',basename(file)))
+	}else{
+		length_table$library = c()	
+	}
 	length_table
 })
 miRNA_length_dist_files = list.files(path=data_directory,pattern="\\.miRNA_data.txt$",full.names=TRUE)
 miRNA_data_len_table = ldply(miRNA_length_dist_files,function(file){
 	length_table = read.table(file,header=T,sep="\t",stringsAsFactors=F)
-	length_table$library = gsub('_R\\d$','',gsub('\\.\\S+$','',basename(file)))
+	if(nrow(length_table)>0){
+		length_table$library = gsub('_R\\d$','',gsub('\\.\\S+$','',basename(file)))
+	}else{
+		length_table$library = c()	
+	}
 	length_table
 })
 	
@@ -348,7 +293,7 @@ mirdeep_star_data_table = ldply(mirdeep_star_files,function(file){
 colnames(mirdeep_star_data_table) = c("miRNA","score","chr","strand","location_precursor","count","location_miRNA","precursor_seq","precursor_sec_struct","mature_seq_precursor_seq","star_loop_seq","UMI_reads","UMIs","UMI_distribution","library")
 library_names = fixLibraryNames(mirdeep_star_data_table$library)
 mirdeep_star_data_table$library = factor(library_names,levels=unique(library_names))
-mirdeep_star_data_table$type = ifelse(grepl('novelMiR',mirdeep_star_data_table$miRNA),"novel","known")
+mirdeep_star_data_table$type = factor(ifelse(grepl('novelMiR',mirdeep_star_data_table$miRNA),"novel","known"),levels=c("known","novel"))
 mirdeep_star_data_table = mirdeep_star_data_table[,c("library","miRNA","type","score","chr","strand","location_precursor","count","location_miRNA","precursor_seq","precursor_sec_struct","mature_seq_precursor_seq","star_loop_seq","UMI_reads","UMIs","UMI_distribution")]
 
 
@@ -366,11 +311,17 @@ mirdeep_star_table = subset(mirdeep_star_data_table,(type=="novel" & score>=7) |
 # set character vector
 mirdeep_star_table$UMI_distribution = as.character(mirdeep_star_table$UMI_distribution)
 
+# output filtered tables
+#for(lib in unique(mirdeep_star_table$library)){
+#	write.table(subset(mirdeep_star_table,library==lib),paste(data_directory,paste(bfx_id,"putative_novel_miRNAs.csv",sep="_"),
+#}
+
 ################################
 # 7. summarise profiled miRNAs #
 ################################
 mirdeep_star_summary = mirdeep_star_table %>% 
-			group_by(library,type) %>% summarise(All=sum(norm_count>0),count_0=sum(norm_count>0 & norm_count<=10),count_10=sum(norm_count>10 & norm_count<=100),count_100=sum(norm_count>100 & norm_count<=1000),count_1000=sum(norm_count>1000 & norm_count<=10000),count_10000=sum(norm_count>10000)) %>%
+			complete(library,type,fill=list(norm_count=0)) %>%
+			group_by(library,type) %>% summarise(All=sum(norm_count>0),count_0=sum(norm_count>0 & norm_count<=10),count_10=sum(norm_count>10 & norm_count<=100),count_100=sum(norm_count>100 & norm_count<=1000),count_1000=sum(norm_count>1000 & norm_count<=10000),count_10000=sum(norm_count>10000)) %>%		
 			as.data.frame()
 			
 colnames(mirdeep_star_summary) = c("library","type","All","0-10","11-100","101-1000","1001-10000",">10000")
@@ -431,9 +382,14 @@ write.table(miRNA_expression_table,paste(data_directory,paste(bfx_id,"known_miRN
 miRNA_expression_table = spread(mirdeep_star_table_known[,c("library","miRNA","norm_count")],library,norm_count,fill=0)
 row.names(miRNA_expression_table) = miRNA_expression_table$miRNA
 miRNA_expression_table$miRNA = NULL
-plotCorrelation(miRNA_expression_table, conditions="", cormethod="spearman", cluster=FALSE, filename=paste(pdf_directory,paste(bfx_id,"known_miRNA_expression_spearman_correlation.pdf",sep="_"),sep="/"))
-plotCorrelation(miRNA_expression_table, conditions="", cormethod="pearson", cluster=FALSE, filename=paste(pdf_directory,paste(bfx_id,"know_miRNA_expression_pearson_correlation.pdf",sep="_"),sep="/"))
 
+if(ncol(miRNA_expression_table)>1){
+	plotCorrelation(miRNA_expression_table, conditions="", cormethod="spearman", cluster=FALSE, title = "Spearman correlation of counts of known miRNAs",filename=paste(pdf_directory,paste(bfx_id,"known_miRNA_expression_spearman_correlation.pdf",sep="_"),sep="/"))
+	plotCorrelation(miRNA_expression_table, conditions="", cormethod="pearson", cluster=FALSE, title = "Pearson correlation of counts of known miRNAs",filename=paste(pdf_directory,paste(bfx_id,"known_miRNA_expression_pearson_correlation.pdf",sep="_"),sep="/"))
+} else {
+	ggsave(grid.text("No known_miRNA_expression_spearman_correlation plot possible"),file=paste(pdf_directory,paste(bfx_id,"known_miRNA_expression_spearman_correlation.pdf",sep="_"),sep="/"))
+	ggsave(grid.text("No known_miRNA_expression_pearson_correlation plot possible"),file=paste(pdf_directory,paste(bfx_id,"known_miRNA_expression_pearson_correlation.pdf",sep="_"),sep="/"))
+}
 
 ################################################################################
 # 9. deal with novel miRNAs (find and group overlapping, filter and output)   #
@@ -459,6 +415,7 @@ novel_miRNAs_gr$group = novel_miRNAs_merged_gr[subjectHits(overlaps_between_nove
 mirdeep_star_table_novel$group = novel_miRNAs_gr$group
 mirdeep_star_table_novel = merge(mirdeep_star_table_novel,as.data.frame(novel_miRNAs_merged_gr)[,c("group","start","end")],by="group")
 
+
 # c) collapse original data frame by group and output a table for novel miRNAs
 novel_miRNAs_table = mirdeep_star_table_novel %>% group_by(group) %>%
 summarise(type=first(type),
@@ -480,8 +437,8 @@ novel_miRNAs_table_colnames = colnames(novel_miRNAs_table)
 novel_miRNAs_table_colnames[1] = "put_miRNA"
 colnames(novel_miRNAs_table) = novel_miRNAs_table_colnames
 
-novel_miRNAs_table$put_miRNA = factor(novel_miRNAs_table$put_miRNA,levels=mixedsort(unique(as.character(novel_miRNAs_table$put_miRNA)),decreasing=T))
-novel_miRNAs_table$chr = factor(novel_miRNAs_table$chr,levels=mixedsort(unique(as.character(novel_miRNAs_table$chr))))
+novel_miRNAs_table$put_miRNA = factor(novel_miRNAs_table$put_miRNA,levels=mixedsort1(unique(as.character(novel_miRNAs_table$put_miRNA)),decreasing=T))
+novel_miRNAs_table$chr = factor(novel_miRNAs_table$chr,levels=mixedsort1(unique(as.character(novel_miRNAs_table$chr))))
 novel_miRNAs_table = novel_miRNAs_table[order(novel_miRNAs_table$put_miRNA),]
 
 write.table(novel_miRNAs_table,paste(data_directory,paste(bfx_id,"putative_novel_miRNAs.csv",sep="_"),sep="/"),quote=F,sep="\t",row.names=F,col.names=T)
@@ -493,7 +450,8 @@ write.table(novel_miRNAs_table,paste(data_directory,paste(bfx_id,"putative_novel
 # in 9. it can happen that from the same sample multiple predictions were merged so that now we have multiple count values per merged putative miRNA and sample 
 #
 # in this case take mean values of counts
-novel_miRNAs_count_table = mirdeep_star_table_novel[,c("library","miRNA","count","norm_count")] %>% group_by(library,miRNA) %>% summarise(count=mean(count),norm_count=mean(norm_count))
+novel_miRNAs_count_table = mirdeep_star_table_novel[,c("library","group","count","norm_count")] %>% group_by(library,group) %>% summarise(count=mean(count),norm_count=mean(norm_count)) %>% as.data.frame()
+colnames(novel_miRNAs_count_table) = c("library","miRNA","count","norm_count")
 
 miRNA_expression_table = spread(novel_miRNAs_count_table[,c("library","miRNA","norm_count")],library,norm_count,fill=0)
 row.names(miRNA_expression_table) = miRNA_expression_table$miRNA
@@ -506,9 +464,14 @@ write.table(miRNA_expression_table,paste(data_directory,paste(bfx_id,"novel_miRN
 miRNA_expression_table = spread(novel_miRNAs_count_table[,c("library","miRNA","norm_count")],library,norm_count,fill=0)
 row.names(miRNA_expression_table) = miRNA_expression_table$miRNA
 miRNA_expression_table$miRNA = NULL
-plotCorrelation(miRNA_expression_table, conditions="", cormethod="spearman", cluster=FALSE, filename=paste(pdf_directory,paste(bfx_id,"novel_miRNA_expression_spearman_correlation.pdf",sep="_"),sep="/"))
-plotCorrelation(miRNA_expression_table, conditions="", cormethod="pearson", cluster=FALSE, filename=paste(pdf_directory,paste(bfx_id,"novel_miRNA_expression_pearson_correlation.pdf",sep="_"),sep="/"))
 
+if(ncol(miRNA_expression_table)>1){
+	plotCorrelation(miRNA_expression_table, conditions="", cormethod="spearman", cluster=FALSE, title = "Spearman correlation of counts of novel miRNAs", filename=paste(pdf_directory,paste(bfx_id,"novel_miRNA_expression_spearman_correlation.pdf",sep="_"),sep="/"))
+	plotCorrelation(miRNA_expression_table, conditions="", cormethod="pearson", cluster=FALSE,  title = "Spearman correlation of counts of novel miRNAs", filename=paste(pdf_directory,paste(bfx_id,"novel_miRNA_expression_pearson_correlation.pdf",sep="_"),sep="/"))
+} else {
+	ggsave(grid.text("No novel_miRNA_expression_spearman_correlation plot possible"),file=paste(pdf_directory,paste(bfx_id,"novel_miRNA_expression_spearman_correlation.pdf",sep="_"),sep="/"))
+	ggsave(grid.text("No novel_miRNA_expression_pearson_correlation plot possible"),file=paste(pdf_directory,paste(bfx_id,"novel_miRNA_expression_pearson_correlation.pdf",sep="_"),sep="/"))
+}
 
 #########################
 # 10. UMI distributions #

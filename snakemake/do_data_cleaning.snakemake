@@ -7,24 +7,26 @@ except NameError:
 # Config/Parameter #
 ####################
 
+# default recipes
+CLEAN_DATA_RECIPES = {
+"WGS" : "-q 5 -m 20 -a truseq=AGATCGGAAGAGC", 
+"RNAseq" : "-q 5 -m 20 -a truseq=AGATCGGAAGAGC",
+"WGS_paired" : "-q 5 -m 20 -a truseq1=AGATCGGAAGAGC -A truseq2=AGATCGGAAGAGC",
+"RNAseq_paired" : "-q 5 -m 20 -a truseq1=AGATCGGAAGAGC -A truseq2=AGATCGGAAGAGC",
+"miRNA" : "--trim-n -m 18 -q 10 -O 12 -n 2 --discard-untrimmed -a neb1=AGATCGGAAGAGCACACGTCT -a truseq_seqmatic_nextflex1=TGGAATTCTCGGGTGCCAAGG -a neb2=AGATCGGAAGAG -a truseq_seqmatic_nextflex2=TGGAATTCTCGG",
+"damID" : "--trim-n -m 20 -n 2 -g ^GGTCGCGGCCGAGGATC -g CGCGGCCGAGGATC -a GATCCTCGGCCGCGACC -e 0.15",
+"gecko" : "-a a1=GTTTTAGAGCTAGAAATAGC -O 20 -e 0.05 --trimmed-only -g g1=GTGGAAAGGACGAAACACCG -g g2=GTGGAAAGGACGAAACACCT -g g3=GTGGAAAGGACGAAACACCC -m 19 -n 2",
+"none" " : " "
+}
+
+
+# set actual trimming recipe
 if CLEAN_DATA_CFG:
 	if "parameter" in CLEAN_DATA_CFG:
-		if CLEAN_DATA_CFG["parameter"] == "WGS":
-			CLEAN_DATA_CFG["parameter"]="-q 5 -a truseq=AGATCGGAAGAGC"
-		elif CLEAN_DATA_CFG["parameter"] == "RNAseq":
-			CLEAN_DATA_CFG["parameter"]="-q 5 -a truseq=AGATCGGAAGAGC"
-		elif CLEAN_DATA_CFG["parameter"] == "WGS_paired":
-			CLEAN_DATA_CFG["parameter"]="-q 5 -a truseq1=AGATCGGAAGAGC -A truseq2=AGATCGGAAGAGC -m 18"
-		elif CLEAN_DATA_CFG["parameter"] == "RNAseq_paired":
-			CLEAN_DATA_CFG["parameter"]="-q 5 -a truseq1=AGATCGGAAGAGC -A truseq2=AGATCGGAAGAGC -m 18"
-		elif CLEAN_DATA_CFG["parameter"] == "miRNA":
-			CLEAN_DATA_CFG["parameter"]="--trim-n -m 18 -q 10 -O 12 -n 2 --discard-untrimmed -a neb1=AGATCGGAAGAGCACACGTCT -a truseq_seqmatic_nextflex1=TGGAATTCTCGGGTGCCAAGG -a neb2=AGATCGGAAGAG -a truseq_seqmatic_nextflex2=TGGAATTCTCGG"
-		elif CLEAN_DATA_CFG["parameter"] == "damID":
-			CLEAN_DATA_CFG["parameter"]="--trim-n -m 30 -n 2 -g ^GGTCGCGGCCGAGGATC -g CGCGGCCGAGGATC -a GATCCTCGGCCGCGACC -e 0.15"
-		elif CLEAN_DATA_CFG["parameter"] == "none":
-			CLEAN_DATA_CFG["parameter"]=""
+		if CLEAN_DATA_CFG["parameter"] in CLEAN_DATA_RECIPES:
+			CLEAN_DATA_CFG["parameter"] = CLEAN_DATA_RECIPES[CLEAN_DATA_CFG["parameter"]]
 	else:
-		raise WorkflowError("Please specify the clean_data.parameter to be used by cutadapt either by 'WGS','RNAseq','miRNA','damID','none' or by providing cutadapt trim/clean parameter.")
+		raise WorkflowError("Please specify the clean_data.parameter to be used by cutadapt either by 'WGS','WGS_paired','RNAseq','RNAseq_paired','miRNA','damID','gecko','none' or by providing cutadapt trim/clean parameter.")
 	if "umi_libs" in CLEAN_DATA_CFG and CLEAN_DATA_CFG["umi_libs"] and "umi_trim" not in CLEAN_DATA_CFG:
 		raise WorkflowError("Please specify UMI trim positions (read1_5,read1_3[;read2_5,read2_3])!")
 	elif "umi_trim" in CLEAN_DATA_CFG and "umi_libs" not in CLEAN_DATA_CFG:
@@ -32,8 +34,6 @@ if CLEAN_DATA_CFG:
 	elif "umi_libs" not in CLEAN_DATA_CFG and "umi_trim" not in CLEAN_DATA_CFG:
 		CLEAN_DATA_CFG["umi_libs"] = 0
 		CLEAN_DATA_CFG["umi_trim"] = 0
-
-
 
 ###########
 # Targets #

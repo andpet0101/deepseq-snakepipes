@@ -6,12 +6,25 @@ library(dplyr)
 library(magrittr)
 library(tidyr)
 library(scales)
+library(grid)
 
 #############
 # Arguments #
 #############
 
-arguments = commandArgs(trailingOnly = TRUE)
+arguments = commandArgs(trailingOnly = F)
+# get path to script
+script_index = grep("--file",arguments)
+script_dir = dirname(sub("--file=","",arguments[script_index]))
+# get rid of leading arguments
+arguments_length = length(arguments)
+arguments_index = grep("--args",arguments)[1]
+if(is.na(arguments_index)){
+	arguments_index=arguments_length
+} else{
+	arguments_index=arguments_index+1
+}
+arguments = arguments[arguments_index:arguments_length]
 if(length(arguments)!=3){
 	stop("Needs the bfx id, the data directory and the pdf directory as arguments\n", call.=FALSE)
 }
@@ -21,19 +34,10 @@ bfx_id = arguments[1]
 data_directory = arguments[2]
 pdf_directory = arguments[3]
 
-#bfx_id = "bfx657"
-#data_directory = "fastq/report/data"
-#pdf_directory = "fastq/report/pdf"
-
 #############
 # Functions #
 #############
-
-bp_labels = function(l){format(big.mark=",",l)}
-kb_labels = function(l,r=0){format(big.mark=",",round(l/1000,r))}
-Mb_labels = function(l,r=0){format(big.mark=",",round(l/1000000,r))}
-Gb_labels = function(l,r=0){format(big.mark=",",round(l/1000000000,r))}
-
+source(paste(script_dir,"functions_settings.R",sep="/"))
 
 parse_cutadapt_summary = function(cutadapt_file){
 	cutadapt_lines = readLines(cutadapt_file)
@@ -152,80 +156,6 @@ parse_umi_summary = function(umi_file){
 
 	umi_summary
 }
-
-# from Matthias' DESeq methods
-plotCorrelation <- function(deseqmatrix, conditions = "", cormethod = "pearson", cluster = FALSE, filename = "") {
-  require(pheatmap)
-  require(RColorBrewer)
-  
-  cormatrix <- cor(deseqmatrix, use = "pairwise.complete.obs", method = cormethod)
-  cornumbers <- round(cormatrix, 3)
-  # colnames(cormatrix) <- NULL
-  if (cormethod == "pearson") {
-    colors <- colorRampPalette(brewer.pal(8, "Blues"))(255)
-    title <- "Pearson Correlation"  
-  }
-  if (cormethod == "spearman") {
-    colors <- colorRampPalette(brewer.pal(8, "Reds"))(255)
-    title <- "Spearman Correlation"
-  }
-  clust <- ifelse(cluster, TRUE, FALSE)
-  
-  if (!is.data.frame(conditions)) {
-    conditions <- NA
-  }
-  
-  cols <- ncol(cormatrix)
-  if (cols <= 10) {
-    fontsize <- 8
-    pheatmap(cormatrix,
-             cluster_rows = clust, cluster_cols = clust,
-             color=colors, annotation_col = conditions,
-             main = title, border_color = NA,
-             fontsize = fontsize, fontsize_row = fontsize+2, fontsize_col = fontsize+2,
-             fontsize_number = fontsize+1,
-             # cellwidth = 20, cellheight = 20,
-             display_numbers = cornumbers, number_color = "Black",
-             filename = filename
-    )
-  } else if((10 < cols) & (cols <= 20)) {
-    fontsize <- 7
-    pheatmap(cormatrix,
-             cluster_rows = clust, cluster_cols = clust,
-             color=colors, annotation_col = conditions,
-             main = title, border_color = NA,
-             fontsize = fontsize, fontsize_row = fontsize, fontsize_col = fontsize,
-             fontsize_number = 0.9 * fontsize,
-             cellwidth = 20, cellheight = 20,
-             display_numbers = cornumbers, number_color = "Black",
-             filename = filename
-    )
-  } else if(cols > 20) {
-    fontsize <- 4
-    pheatmap(cormatrix, 
-             cluster_rows = clust, cluster_cols = clust,
-             color=colors, annotation_col = conditions,
-             main = title, border_color = NA,
-             fontsize = fontsize, fontsize_row = fontsize, fontsize_col = fontsize,
-             cellwidth = 20, cellheight = 20,
-             display_numbers = F,
-             filename = filename
-    )
-  }
-}
-
-# fixes library names
-fixLibraryNames = function(library_names){
-	library_names_wo_bfx = as.character(gsub("^bfx\\d+_","",library_names))
-	library_names_wo_bfx_lib = as.character(gsub("^L\\d+_","",library_names_wo_bfx))
-	
-	if(length(unique(library_names_wo_bfx))==length(unique(library_names_wo_bfx_lib))){
-		library_names_wo_bfx_lib
-	}else{
-		library_names_wo_bfx
-	}
-}
-
 
 ########
 # Main #
@@ -433,7 +363,12 @@ if(have_umi_data){
 	umi_distribution_table_w = spread(umi_distribution_table[,c("library","UMI","norm_count")],library,norm_count,fill=0)
 	row.names(umi_distribution_table_w) = umi_distribution_table_w$UMI
 	umi_distribution_table_w$UMI = NULL
-	plotCorrelation(umi_distribution_table_w, conditions="", cormethod="spearman", cluster=FALSE, filename=paste(pdf_directory,paste(bfx_id,"umi_spearman_correlation.pdf",sep="_"),sep="/"))
+
+	if(ncol(umi_distribution_table)>1){
+		plotCorrelation(umi_distribution_table_w, conditions="", cormethod="spearman", cluster=FALSE,  title = "Spearman correlation of UMI counts", filename=paste(pdf_directory,paste(bfx_id,"umi_spearman_correlation.pdf",sep="_"),sep="/"))
+	} else {
+		ggsave(grid.text("No umi_spearman_correlation plot possible"),file=paste(pdf_directory,paste(bfx_id,"umi_spearman_correlation.pdf",sep="_"),sep="/"))
+	}
 }
 
 

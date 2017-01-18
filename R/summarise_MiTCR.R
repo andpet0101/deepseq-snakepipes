@@ -7,14 +7,28 @@ library(reshape2)
 library(scales)
 library(data.table)
 
-arguments = commandArgs(trailingOnly = TRUE)
-if(length(arguments)!=4){
-	stop("Needs the bfx id, the data directory, the fastq directory and the pdf directory as arguments\n", call.=FALSE)
-}
 
 #############
 # Arguments #
 #############
+
+arguments = commandArgs(trailingOnly = F)
+# get path to script
+script_index = grep("--file",arguments)
+script_dir = dirname(sub("--file=","",arguments[script_index]))
+# get rid of leading arguments
+arguments_length = length(arguments)
+arguments_index = grep("--args",arguments)[1]
+if(is.na(arguments_index)){
+	arguments_index=arguments_length
+} else{
+	arguments_index=arguments_index+1
+}
+arguments = arguments[arguments_index:arguments_length]
+
+if(length(arguments)!=4){
+	stop("Needs the bfx id, the data directory, the fastq directory and the pdf directory as arguments\n", call.=FALSE)
+}
 
 bfx_id = arguments[1]
 data.dir = arguments[2]
@@ -27,7 +41,6 @@ files = gsub(
   "\\1.txt",
   list.files(path=data.dir,pattern="^.*\\.cls$",full.names=TRUE)
 )
-
 
 counts = ldply(files, function(x){
   df <- fread(x, skip = 1)[,c(1,3), with=FALSE]

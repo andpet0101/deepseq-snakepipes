@@ -159,16 +159,15 @@ while(@fqs = read_fastq_records($fhin1,$fhin2)){
 			next;
 		}
 		
-		# add UMI separated by '+' to the sequence name
-		# http://support.illumina.com/help/BaseSpace_OLH_009008/Content/Source/Informatics/BS/FileFormat_FASTQ-files_swBS.htm
+		# add UMI to read name (e.g. XYZ:UMI_ACGT)
 		
 		@id = split(/\s/,$fqs[0]->[0]);
-		$id[0] .= ":".join("+",@umi_parts);
+		$id[0] .= ":UMI_".join("",@umi_parts);
 		$fqs[0]->[0] = join(" ",@id); 
 
 		if(scalar(@fqs)==2){
 			@id = split(/\s/,$fqs[1]->[0]);
-			$id[0] .= ":".join("+",@umi_parts);
+			$id[0] .= ":UMI_".join("",@umi_parts);
 			$fqs[1]->[0] = join(" ",@id);
 		}
 		
@@ -180,7 +179,7 @@ while(@fqs = read_fastq_records($fhin1,$fhin2)){
 		}
 
 		if($umi_distribution){
-			$u = join("+",@umi_parts);
+			$u = join("",@umi_parts);
 			$umi_distribution{$u} ||= 0;
 			$umi_distribution{$u}++;
 		}

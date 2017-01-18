@@ -128,6 +128,8 @@ if(!$dryrun){system("mkdir -p $logdir");}
 # two methods for cluster submission: DRMAA (default) and qsub
 $use_drmaa = 0 if($use_qsub);
 
+# 
+
 
 #################################################
 # Print snakemake file description upon request #
@@ -187,12 +189,12 @@ if($host=~/^login-0-0/){
 	# use DRMAA for job control
 	if($use_drmaa){
 		$cmd = "export DRMAA_LIBRARY_PATH=".$ENV{'SGE_ROOT'}."/lib/linux-x64/libdrmaa.so;".$cmd;
-		$cmd .= " --drmaa \" -b n -o $logdir -e $logdir ";
+		$cmd .= " --drmaa \"-b n -o $logdir -e $logdir ";
 	}
 
 	# use qsub for job control, add a 'sleep 10' to give the queue a chance to update after each job
 	else{
-		$cmd .= " --cluster \"sleep 10;qsub -b n -o $logdir -e $logdir ";
+		$cmd .= " --cluster \"qsub -b n -o $logdir -e $logdir ";
 	}
 	$cmd .= " -q ngs.q ";
 

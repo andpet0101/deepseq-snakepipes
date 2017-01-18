@@ -12,7 +12,13 @@ except NameError:
 # Targets #
 ###########
 
-FASTQC_TARGETS = ["fastqc/report/pdf/"+PROJECT+"_fastqc_overview.pdf","fastqc/report/data/"+PROJECT+"_fastqc_overview.csv",expand("fastqc/{f}_fastqc.html",f=FASTQ_BASE),expand("fastqc/{f}_fastqc.zip",f=FASTQ_BASE)]
+FASTQC_TARGETS = []
+
+for stat in ["fastqc_summary","per_base_sequence_quality","per_sequence_quality_scores","per_base_sequence_content","per_sequence_gc_content","per_base_n_content","sequence_length_distribution",
+"total_deduplicated_levels","sequence_duplication_levels","overrepresented_sequences","adapter_content","total_adapter_content","kmer_content"]:
+	FASTQC_TARGETS.append("fastqc/report/pdf/"+PROJECT+"_"+stat+".pdf")
+	FASTQC_TARGETS.append("fastqc/report/data/"+PROJECT+"_"+stat+".csv")
+
 
 ##########
 # Checks #
@@ -36,8 +42,7 @@ rule summarise_fastqc:
 	input:
 		expand("fastqc/report/data/{f}_fastqc.txt",f=FASTQ_BASE)
 	output:
-		"fastqc/report/pdf/"+PROJECT+"_fastqc_overview.pdf",
-		"fastqc/report/data/"+PROJECT+"_fastqc_overview.csv"
+		FASTQC_TARGETS
 	log:
 		"fastqc/log/summarise_fastqc.log"
 	shell:

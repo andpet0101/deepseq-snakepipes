@@ -4,6 +4,9 @@ import os
 import re
 import csv
 
+# this variable prevents that this file is included multiple times
+GENERAL_SETTINGS_INCLUDED = 1
+
 ##############################################################
 # config file is now static and can be in YML or JSON format #
 ##############################################################
@@ -167,6 +170,16 @@ CLEAN_DATA_CFG = config.get("clean_data",dict())
 # programs and jars ############
 PROGRAM_CFG = config.get("programs",dict())
 
+# tmp dir ############
+TMP_DIR = config.get("tmp","")
+if not TMP_DIR:
+	TMP_DIR = "${TMPDIR:-.}"
+
+# paths ############
+os.environ['PATH'] = os.path.dirname(os.path.abspath(workflow.snakefile)) + "/../scripts/:" + os.path.dirname(os.path.abspath(workflow.snakefile)) + "/../R/:/group/sequencing/Bfx/scripts/common/:" + os.environ['PATH']
+os.environ['PYTHONPATH'] = "/group/sequencing/Bfx/scripts/mathias/dsp/dsp/src/:" + os.environ['PYTHONPATH']
+
+
 ##############################
 # names, basenames and files #
 ##############################
@@ -180,18 +193,22 @@ if "fastq" not in INPUT_CFG:
 if not INPUT_CFG["fastq"]:
 	raise WorkflowError("Could not find FASTQ files in the 'fastq' directory!")
 
-INPUT_CFG["fastq_base"] = [re.sub('\.fastq.gz','',f) for f in INPUT_CFG["fastq"]]
-INPUT_CFG["fastq_base"] = sorted(set([re.sub('\.\S+$','',f) for f in INPUT_CFG["fastq_base"]]))
+INPUT_CFG["fastq_base"] = [re.sub('\.\S+$','',re.sub('\.fastq.gz','',f)) for f in INPUT_CFG["fastq"]]
+INPUT_CFG["fastq_base"] = sorted(set(INPUT_CFG["fastq_base"]),key=lambda x: INPUT_CFG["fastq_base"].index(x))
 if not INPUT_CFG["fastq_base"]:
 	raise WorkflowError("Could not find valid FASTQ files in the 'fastq' directory!")
 
-if "libraries" not in INPUT_CFG: 
-	INPUT_CFG["libraries"] = sorted(set([re.sub('(_R\d)$','',os.path.basename(f)) for f in INPUT_CFG["fastq_base"]]))
-if not INPUT_CFG["libraries"]:
-	raise WorkflowError("Could not get library/sample names from the FASTQ files in the 'fastq' directory!")
+
+INPUT_CFG["libraries"] = [re.sub('(_R\d)$','',os.path.basename(f)) for f in INPUT_CFG["fastq_base"]]
+INPUT_CFG["libraries"] = sorted(set(INPUT_CFG["libraries"]),key=lambda x: INPUT_CFG["libraries"].index(x))
+
+INPUT_CFG["samples"] = [re.sub('^L\d+_','',l) for l in INPUT_CFG["libraries"]]
+INPUT_CFG["samples"] = sorted(set(INPUT_CFG["samples"]),key=lambda x: INPUT_CFG["samples"].index(x))
+
 
 FASTQ_BASE = INPUT_CFG["fastq_base"]
 LIBRARIES = INPUT_CFG["libraries"]
+SAMPLES = INPUT_CFG["samples"]
 
 
 #############
@@ -209,23 +226,3 @@ def module_load(*modules):
 	return module_str
 
 			
-
-#########
-# other #
-#########
-
-# path for scripts
-os.environ['PATH'] = "/group/sequencing/Bfx/scripts/andreasp/deepseq-snakepipes/scripts:/group/sequencing/Bfx/scripts/andreasp/deepseq-snakepipes/R:/group/sequencing/Bfx/scripts/common:"+os.environ['PATH']
-if "PYTHONPATH" in os.environ:
-	os.environ['PYTHONPATH'] = "/group/sequencing/Bfx/scripts/mathias/dsp/dsp/src:"+os.environ['PYTHONPATH']
-else:
-	os.environ['PYTHONPATH'] = "/group/sequencing/Bfx/scripts/mathias/dsp/dsp/src"
-
-# tmp dir to use
-TMP_DIR="${TMPDIR:-.}"
-#TMP_DIR="."
-
-# this variable prevents that this file is included multiple times
-GENERAL_SETTINGS_INCLUDED = 1
-
-

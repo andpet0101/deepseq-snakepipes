@@ -38,14 +38,14 @@ rule do_rnaseq:
 		DOC_TARGETS
 
 rule build_rnaseq_report_script:
-	input:
-		"/group/sequencing/Bfx/scripts/mathias/dsp/dsp/files/figure-report-config.csv"
+	params:
+		template="/group/sequencing/Bfx/scripts/mathias/dsp/dsp/files/figure-report-config.csv"
 	output:
 		"report/"+PROJECT+"_figure-report-config.csv",
 		"report/"+PROJECT+"_build_report.sh"
 	run:
 		from shutil import copyfile
-		copyfile(input[0],output[0])
+		copyfile(params.template,output[0])
 		with open(output[1],"w") as outstream:
 			outstream.write("#!/bin/bash\n\n")
 			outstream.write("module load apps/python\n")
@@ -53,7 +53,7 @@ rule build_rnaseq_report_script:
 			outstream.write("/group/sequencing/Bfx/scripts/common/figures_report.py -i ../" + ALIGNER_CFG["program"] + "/report/pdf/ ../genecount/report/pdf/ ../de-analysis/pdf/ ")
 			outstream.write(" -c " + PROJECT + "_figure-report-config.csv -r . -b " + PROJECT + " -p projects/" + PROJECT + "/pdf/\n")
 			outstream.write("/group/sequencing/Bfx/scripts/common/build_report.py -r . -b " + PROJECT + " -d ../de-analysis/" + PROJECT + ".deseq-results-padj.none.csv")
-			outstream.write(" -l " + PROJECT + "_labels.csv -t projects/" + PROJECT + " -s " + SPECIES + " -e " + ANNOTATION_CFG["version"] + "\n")
+			outstream.write(" -c ../de_analysis/" + PROJECT +".condition.csv -l " + PROJECT + "_labels.csv -v " + PROJECT + "_program_versions.csv -t projects/" + PROJECT + " -s " + SPECIES + " -e " + ANNOTATION_CFG["version"] + "\n")
 
 rule collect_program_versions:
 	input:
