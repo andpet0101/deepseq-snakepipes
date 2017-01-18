@@ -1,0 +1,94 @@
+try:
+	GENERAL_SETTINGS_INCLUDED
+except NameError: 
+	include: "general_settings.snakemake"
+
+
+####################
+# Config/Parameter #
+####################
+
+CONTAMINATION_CFG = config.get("contamination_screen",dict())
+
+if "databases" not in CONTAMINATION_CFG:
+	CONTAMINATION_CFG["databases"] = {"Human" : "hg38","Mouse" : "mm10","Rat" : "rn6","Drosophila" : "dm6","Zebrafish" : "GRCz10","E.coli" : "U00096","ERCC" : "ERCC92","UniVec" : "UniVec_Core"}
+
+if len(CONTAMINATION_CFG["databases"].keys()) == 0:
+	raise WorkflowError("Please specify a putative contamination species!")
+
+for species in list(CONTAMINATION_CFG["databases"].keys()):
+	if not os.path.exists(CONTAMINATION_CFG["databases"][species]+".1.bt2") and os.path.exists("/projects/seq-work/user/pipeline/bowtie2/"+CONTAMINATION_CFG["databases"][species]+".1.bt2"):
+		CONTAMINATION_CFG["databases"][species] = "/projects/seq-work/user/pipeline/bowtie2/"+CONTAMINATION_CFG["databases"][species]
+	if not os.path.exists(CONTAMINATION_CFG["databases"][species]+".1.bt2"):
+		raise WorkflowError("Could not find files for bowtie2 index "+CONTAMINATION_CFG["databases"][species]+" (if not index is not present in /projects/seq-work/user/pipeline/bowtie2/, specify an absolute path!")
+
+###########
+# Targets #
+###########
+
+CONTAMINATION_TARGETS = ["fastq_screen/report/data/"+PROJECT+"_contamination_database_specific_hits.csv","fastq_screen/report/data/"+PROJECT+"_no_hits.csv","fastq_screen/report/pdf/"+PROJECT+"_contamination_database_specific_hits.pdf","fastq_screen/report/pdf/"+PROJECT+"_no_hits.pdf"]
+
+##########
+# Checks #
+##########
+
+
+#########
+# Rules #
+#########
+
+shell.prefix("set -euf -o pipefail;")
+
+rule do_contamination_screen:
+	input:
+		CONTAMINATION_TARGETS
+
+rule summarise_fastq_screen:
+	input:
+		["fastq_screen/report/data/"+l+"_R1_screen.csv" for l in INPUT_CFG["libraries"]]
+	output:
+		"fastq_screen/report/pdf/"+PROJECT+"_contamination_database_specific_hits.pdf",
+		"fastq_screen/report/pdf/"+PROJECT+"_no_hits.pdf",
+		"fastq_screen/report/data/"+PROJECT+"_contamination_database_specific_hits.csv",
+		"fastq_screen/report/data/"+PROJECT+"_no_hits.csv",
+		
+	log:
+		"fastq_screen/log/summarise_fastq_screen.log"
+	shell:
+		"\n\t\t("+module_load("R")+
+		"""
+		summarise_fastq_screen.R {PROJECT} fastq_screen/report/data fastq_screen/report/pdf) >& {log}
+		"""
+
+
+rule run_fastq_screen:
+	input:
+		fq="fastq/{basename}.fastq.gz",
+		conf="fastq_screen/fastq_screen.conf"
+	output:
+		png="fastq_screen/{basename}_screen.png",
+		txt="fastq_screen/{basename}_screen.txt",
+		csv="fastq_screen/report/data/{basename}_screen.csv",
+		png2="fastq_screen/report/png/{basename}_screen.png"
+	log:
+		"fastq_screen/log/{basename}_screen.log"
+	threads:
+		4
+	shell:
+		"\n\t\t("+module_load("fastq_screen","bowtie2")+
+		"""
+		fastq_screen --outdir fastq_screen/ --threads ${{NSLOTS:-{threads}}} --conf {input.conf} --aligner bowtie2 --bowtie2 "--fast" --force {input.fq}) >& {log}
+		cp {output.txt} {output.csv}
+		cp {output.png} {output.png2}
+		"""
+
+rule prepare_fastq_screen_conf:
+	output:
+		"fastq_screen/fastq_screen.conf"
+	run:
+		with open(output[0], 'w') as outstream:
+			outstream.write("THREADS\t4\n")
+			for species in list(CONTAMINATION_CFG["databases"].keys()):
+				outstream.write("DATABASE\t"+species+"\t"+CONTAMINATION_CFG["databases"][species]+"\n")
+
+
