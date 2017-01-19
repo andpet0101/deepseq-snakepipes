@@ -218,7 +218,7 @@ rule run_gsnap_paired:
 		fq1="fastq/{basename}_R1.clean.fastq.gz" if CLEAN_DATA_CFG else "fastq/{basename}_R1.fastq.gz",
 		fq2="fastq/{basename}_R2.clean.fastq.gz" if CLEAN_DATA_CFG else "fastq/{basename}_R2.fastq.gz",
 	output:
-		bam="gsnap/{basename}.bam",
+		bam="gsnap/{basename}.bam"
 		# transloc="gsnap/{basename}.transloc.bam"
 	log:
 		"gsnap/log/{basename}.log"
@@ -230,7 +230,7 @@ rule run_gsnap_paired:
 		RG="{wildcards.basename}";LB="{wildcards.basename}";SM="{wildcards.basename}"
 		if [[ "{wildcards.basename}" =~ ^(L[0-9]+)_(.+) ]];then LB="${{BASH_REMATCH[1]}}";SM="${{BASH_REMATCH[2]}}";fi
 		{ALIGNER_CFG[binary]} -D {ALIGNER_CFG[index_directory]} -d {ALIGNER_CFG[index]} --gunzip -A sam -t `expr ${{NSLOTS:-{threads}}} - 2` {ALIGNER_CFG[parameter]} --read-group-id=\"$RG\" --read-group-name=\"$SM\" --read-group-library=\"$LB\" --read-group-platform=illumina {input.fq1} {input.fq2} > {TMP_DIR}/{wildcards.basename}.sam;
-		# sam_sort -D {ALIGNER_CFG[index_directory]} -d {ALIGNER_CFG[index]} --sort2=orig --mark-first {TMP_DIR}/{wildcards.basename}.sam | samtools view -bS - | java -jar /group/sequencing/Bfx/scripts/mathias/deep_seq_pipeline_java/jar/SplitGsnapTranslocation.jar I=/dev/stdin ON={output.bam} OT={output.transloc} SO=coordinate TMP_DIR={TMP_DIR}) >& {log}
 		sam_sort -D {ALIGNER_CFG[index_directory]} -d {ALIGNER_CFG[index]} --sort2=orig --mark-first  {TMP_DIR}/{wildcards.basename}.sam | samtools view -bS - > {output.bam}) >& {log}
 		"""
 
+		# sam_sort -D {ALIGNER_CFG[index_directory]} -d {ALIGNER_CFG[index]} --sort2=orig --mark-first {TMP_DIR}/{wildcards.basename}.sam | samtools view -bS - | java -jar /group/sequencing/Bfx/scripts/mathias/deep_seq_pipeline_java/jar/SplitGsnapTranslocation.jar I=/dev/stdin ON={output.bam} OT={output.transloc} SO=coordinate TMP_DIR={TMP_DIR}) >& {log}
