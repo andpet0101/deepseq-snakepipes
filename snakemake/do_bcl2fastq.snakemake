@@ -8,6 +8,8 @@ PIPETARGETS = [os.path.join(pipelining, longid, i, 'bcl2fastq.done')for i in PIP
 
 localrules: run_fqtransport, do_all
 
+shell.prefix("set -euf -o pipefail;")
+
 rule do_all:
 	input:
 		PIPETARGETS,

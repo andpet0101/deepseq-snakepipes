@@ -36,19 +36,26 @@ else:
 
 # sequencing ################
 sequencing = config.get("sequencing","")
+
 if not sequencing:
 	print('Extracting sequencing directory from pipelining folder')
 	if 'HiSeq' in samplesheethome:
 		sequencing = '/projects/sequencing/illumina1/'
 	elif 'NextSeq' in samplesheethome:
 		sequencing = '/projects/sequencing/nextseq-01/'
-	elif 'MiSeq':
+	elif 'MiSeq' in samplesheethome:
 		sequencing = '/projects/sequencing/miseq-01/'
+	else:
+		raise WorkflowError("Please provide a valid sequencing directory!")
 	print('Setting sequencing directory to {0}'.format(sequencing))
+	if not sequencing[-1] == os.sep: sequencing = '{0}{1}'.format(sequencing, os.sep)
 elif not os.path.exists(sequencing):
 	raise WorkflowError("Please provide a valid sequencing directory!")
 else:
 	if not sequencing[-1] == os.sep: sequencing = '{0}{1}'.format(sequencing, os.sep)
+
+if not os.path.exists(os.path.join(sequencing, longid)):
+	raise WorkflowError("Sequencing directory doesn't have flowcell directory")
 
 # fq_storage ################
 fq_storage = config.get("fq_storage","")
