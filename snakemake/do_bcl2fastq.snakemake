@@ -70,7 +70,7 @@ rule run_fastqcdemultiplex:
 		"""
 		module load apps/fastqc
 		mkdir -p {fq_storage}{longid}/fastqc
-		fastqc -k 10 -t $NSLOTS -a /group/sequencing/Bfx/scripts/mathias/deep_seq_pipeline/deep_seq_pipeline/files/fastqc_adapter.txt -o {fq_storage}{longid}/fastqc --nogroup {fq_storage}{longid}/*/*.fastq.gz >& {log}
+		find {fq_storage}{longid} -type f -name "*fastq.gz" | xargs -L $NSLOTS fastqc -k 10 -t $NSLOTS -a /group/sequencing/Bfx/scripts/mathias/deep_seq_pipeline/deep_seq_pipeline/files/fastqc_adapter.txt -o {fq_storage}{longid}/fastqc --nogroup >& {log}
 		touch {output.done}
 		"""
 
