@@ -8,7 +8,7 @@ except NameError:
 ####################
 
 # default recipes
-CLEAN_DATA_RECIPES = {"WGS" : "-q 5 -m 20 -a truseq=AGATCGGAAGAGC","RNAseq" : "-q 5 -m 20 -a truseq=AGATCGGAAGAGC","WGS_paired" : "-q 5 -m 20 -a truseq1=AGATCGGAAGAGC -A truseq2=AGATCGGAAGAGC","RNAseq_paired" : "-q 5 -m 20 -a truseq1=AGATCGGAAGAGC -A truseq2=AGATCGGAAGAGC","miRNA" : "--trim-n -m 18 -q 10 -O 12 -n 2 --discard-untrimmed -a neb1=AGATCGGAAGAGCACACGTCT -a truseq_seqmatic_nextflex1=TGGAATTCTCGGGTGCCAAGG -a neb2=AGATCGGAAGAG -a truseq_seqmatic_nextflex2=TGGAATTCTCGG","damID" : "--trim-n -m 20 -n 2 -g ^GGTCGCGGCCGAGGATC -g CGCGGCCGAGGATC -a GATCCTCGGCCGCGACC -e 0.15","gecko" : "-a a1=GTTTTAGAGCTAGAAATAGC -O 20 -e 0.05 --trimmed-only -g g1=GTGGAAAGGACGAAACACCG -g g2=GTGGAAAGGACGAAACACCT -g g3=GTGGAAAGGACGAAACACCC -m 19 -n 2","none" : " "}
+CLEAN_DATA_RECIPES = {"WGS" : "-q 5 -m 20 -a truseq=AGATCGGAAGAGC","RNAseq" : "-q 5 -m 20 -a truseq=AGATCGGAAGAGC","WGS_paired" : "-q 5 -m 20 -a truseq1=AGATCGGAAGAGC -A truseq2=AGATCGGAAGAGC","RNAseq_paired" : "-q 5 -m 20 -a truseq1=AGATCGGAAGAGC -A truseq2=AGATCGGAAGAGC","miRNA" : "--trim-n -m 18 -q 10 -O 12 -n 2 --discard-untrimmed -a neb1=AGATCGGAAGAGCACACGTCT -a truseq_seqmatic_nextflex1=TGGAATTCTCGGGTGCCAAGG -a neb2=AGATCGGAAGAG -a truseq_seqmatic_nextflex2=TGGAATTCTCGG","damID" : "--trim-n -m 20 -n 2 -g ^GGTCGCGGCCGAGGATC -g CGCGGCCGAGGATC -a GATCCTCGGCCGCGACC -e 0.15","gecko" : "-a a1=GTTTTAGAGCTAGAAATAGC -O 20 -e 0.05 --trimmed-only -g g1=GTGGAAAGGACGAAACACCG -g g2=GTGGAAAGGACGAAACACCT -g g3=GTGGAAAGGACGAAACACCC -m 19 -n 2","none" : " ","C1" : "-m 20 -q 10 -n 2 -O 20 -a polyA='A{100}' -a polyG='G{100}' -a polyT='T{100}'"}
 
 
 # set actual trimming recipe
