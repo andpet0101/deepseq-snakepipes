@@ -66,7 +66,7 @@ rule make_mapping_plots:
 		"\n\t\t("+module_load("python","R")+
 		"""
 		touch {MAPPING_PLOTS_FILES}
-		figures_mappingstatistics.py -i {ALIGNER_CFG[program]}/report/data -r {ALIGNER_CFG[program]}/report -s """ + ("Complete Gene" if CALC_GENE_COMPLEXITY==1 else "Complete")  + """ -b {PROJECT}) >& {log}
+		figures_mappingstatistics.py -i {ALIGNER_CFG[program]}/report/data -r {ALIGNER_CFG[program]}/report -s """ + ("Complete Gene" if CALC_GENE_COMPLEXITY==1 else "Complete")  + """ -b {PROJECT} -d {LIBCOMPLEXITY_CFG[lib_display]}) >& {log}
 		"""
 
 if CALC_GENE_COMPLEXITY==1:

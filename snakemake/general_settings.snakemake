@@ -130,6 +130,9 @@ if ALIGNER_CFG:
 LIBCOMPLEXITY_CFG = config.get("libcomplexity",dict())
 if "subsample_size" not in LIBCOMPLEXITY_CFG:
 	LIBCOMPLEXITY_CFG["subsample_size"] = 1000000
+if 'lib_display' not in LIBCOMPLEXITY_CFG:
+	LIBCOMPLEXITY_CFG['lib_display'] = -1
+
 
 # calc_gene_complexity: calculate gene level complexity stats
 # gsnap always triggers calc_gene_complexity = 1 unless explicitly deactivated (libcomplexity.calc_gene_complexity = 0)

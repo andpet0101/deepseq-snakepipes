@@ -7,6 +7,8 @@ library(magrittr)
 library(tidyr)
 library(scales)
 library(grid)
+theme_set(theme_bw(14))
+
 
 #############
 # Arguments #
@@ -204,65 +206,55 @@ trimming_summary$bp_filtered = trimming_summary$total_bp - trimming_summary$bp_p
 trimming_summary_m = gather(trimming_summary,"metric","value",-library)
 
 # plot read input data 
-input_data_reads_plot = ggplot(subset(trimming_summary_m,metric %in% c("total_reads")),aes(x=library,y=value)) +
-geom_bar(stat="identity") +
-theme_bw() +
-scale_x_discrete("Library") +
-scale_y_continuous("Number of reads",label=comma) +
-theme(axis.text.x=element_text(angle=45,vjust = 1, hjust=1)) +
-ggtitle("Sequenced reads")
+inputdf <- subset(trimming_summary_m,metric == "total_reads")
+inputdf$Libraries <- 'Libraries'
+input_data_reads_plot <- ggplot(inputdf, aes(x=Libraries, y=value)) + geom_boxplot(notch = T, fill = 'darkgoldenrod1') + 
+  scale_y_continuous("Number of reads",label=comma) + ggtitle("Sequenced reads") + 
+  theme(axis.text.x=element_blank(), axis.ticks.x=element_blank())
 ggsave(paste(pdf_directory,paste(bfx_id,"input_reads.pdf",sep="_"),sep="/"),input_data_reads_plot)
 
 # plot bp input data
-input_data_bp_plot = ggplot(subset(trimming_summary_m,metric %in% c("total_bp")),aes(x=library,y=value)) +
-geom_bar(stat="identity") +
-theme_bw() +
-scale_x_discrete("Library") +
-scale_y_continuous("Total sequence data in Mb",label=Mb_labels) +
-theme(axis.text.x=element_text(angle=45,vjust = 1, hjust=1)) +
-ggtitle("Sequenced bps")
+inputdf <- subset(trimming_summary_m,metric == "total_bp")
+inputdf$Libraries <- 'Libraries'
+input_data_bp_plot = ggplot(inputdf ,aes(x=Libraries,y=value)) + geom_boxplot(notch = T, fill = 'darkgoldenrod1') + 
+  scale_y_continuous("Total sequence data in Mb",label=Mb_labels) + ggtitle("Sequenced bps") +
+  theme(axis.text.x=element_blank(), axis.ticks.x=element_blank())
 ggsave(paste(pdf_directory,paste(bfx_id,"input_bp.pdf",sep="_"),sep="/"),input_data_bp_plot)
 
 
 # read fate plot (only before and after)
 plot_data = subset(trimming_summary_m,metric %in% c("reads_filtered","reads_passed"))
 plot_data$metric = factor(plot_data$metric,levels=c("reads_passed","reads_filtered"))
-read_fate_plot = ggplot(plot_data,aes(x=library,y=value,fill=metric)) +
-geom_bar(stat="identity",position="fill") +
-theme_bw() +
-scale_x_discrete("Library") +
-scale_y_continuous("Percentage of reads",label=percent) +
-scale_fill_brewer("Read status",type="qual",palette=2,labels=c("passed","filtered")) +
-theme(axis.text.x=element_text(angle=45,vjust = 1, hjust=1)) +
-ggtitle("Reads removed after data cleaning")
+plot_data$percent <- plot_data$value/max(plot_data$value)
+read_fate_plot = ggplot(plot_data,aes(x=metric,y=percent, fill=metric)) + geom_boxplot(notch = T) + 
+  scale_x_discrete("Read status", labels = c('Passed', 'Filtered')) + 
+  scale_y_continuous("Percentage of reads", labels = percent) + 
+  scale_fill_brewer("Read status",type="qual",palette=2) +
+  ggtitle("Reads removed after data cleaning") + theme(legend.position = 'none') 
 ggsave(paste(pdf_directory,paste(bfx_id,"reads_removed.pdf",sep="_"),sep="/"),read_fate_plot)
 
 
 # bp fate plot (only before and after)
 plot_data = subset(trimming_summary_m,metric %in% c("bp_filtered","bp_passed"))
 plot_data$metric = factor(plot_data$metric,levels=c("bp_passed","bp_filtered"))
-bp_fate_plot = ggplot(plot_data,aes(x=library,y=value,fill=metric)) +
-geom_bar(stat="identity",position="fill") +
-theme_bw() +
-scale_x_discrete("Library") +
-scale_y_continuous("Percentage of bp",label=percent) +
-scale_fill_brewer("Bp status",type="qual",palette=2,labels=c("passed","filtered")) +
-theme(axis.text.x=element_text(angle=45,vjust = 1, hjust=1)) +
-ggtitle("Bps removed after data cleaning")
+plot_data$percent <- plot_data$value/max(plot_data$value)
+bp_fate_plot = ggplot(plot_data,aes(x=metric,y=percent, fill=metric)) + geom_boxplot(notch = T) + 
+  scale_x_discrete("Read status", labels = c('Passed', 'Filtered')) +
+  scale_y_continuous("Percentage of reads", labels = percent) + 
+  scale_fill_brewer("Read status",type="qual",palette=2) +
+  ggtitle("Bps removed after data cleaning") + theme(legend.position = 'none') 
 ggsave(paste(pdf_directory,paste(bfx_id,"bp_removed.pdf",sep="_"),sep="/"),bp_fate_plot)
 
 # read fate plot (complex)
 plot_data = subset(trimming_summary_m,metric %in% c("without_adapter","too_short","without_umi","reads_passed"))
 plot_data$metric = factor(plot_data$metric,levels=c("reads_passed","without_adapter","too_short","without_umi"))
 plot_data = subset(plot_data,!(metric=="without_umi" & value==0))
-read_complex_fate_plot = ggplot(plot_data,aes(x=library,y=value,fill=metric,order=metric)) +
-geom_bar(stat="identity",position="fill") +
-theme_bw() +
-scale_x_discrete("Library") +
-scale_y_continuous("Percentage of reads",label=percent) +
-scale_fill_brewer("Read status",type="qual",palette=2,labels=c("passed","without adapter","too short/primer dimer","without UMI")) +
-theme(axis.text.x=element_text(angle=45,vjust = 1, hjust=1)) +
-ggtitle("Reads removed by reason")
+plot_data$percent <- plot_data$value/max(plot_data$value)
+
+read_complex_fate_plot = ggplot(plot_data,aes(x=metric,y=percent, fill=metric, order = metric)) + geom_boxplot(notch = T) + 
+  scale_fill_brewer("Read status",type="qual",palette=2,labels=c("passed","without adapter","too short/primer dimer","without UMI")) +
+  scale_y_continuous("Percentage of reads", labels = percent) + 
+  ggtitle("Reads removed by reason") + theme(legend.position = 'none')
 ggsave(paste(pdf_directory,paste(bfx_id,"reads_removed_by_cause.pdf",sep="_"),sep="/"),read_complex_fate_plot)
 
 # plot length distribution
@@ -283,19 +275,18 @@ length_dist_table =  length_dist_table %>%
 
 num_columns = 4
 
+length_dist_table$length <- factor(length_dist_table$length)
+
 length_dist_plot = ggplot(length_dist_table,aes(x=length,y=frac_reads)) +
-geom_bar(stat="identity",colour="black",fill="black") +
-theme_bw() +
-scale_x_continuous("Read length in bp",limits=c(min(length_dist_table$length),max(length_dist_table$length))) +
-scale_y_continuous("Fraction of reads") +
-facet_wrap(~ library,scales="free_x",ncol=num_columns) +
-ggtitle("Length distribution of clean reads")
+  geom_boxplot(notch = F,fill="black") + scale_y_continuous("Fraction of reads") +
+  xlab("Read length in bp") + ggtitle("Length distribution of clean reads")
 
 required_width = 11/4*num_columns
 required_height = 6.5/3*ceiling(length(levels(length_dist_table$library))/num_columns)
 
 
-ggsave(paste(pdf_directory,paste(bfx_id,"clean_reads_length_distribution.pdf",sep="_"),sep="/"),length_dist_plot,width=required_width,height=required_height)
+ggsave(paste(pdf_directory,paste(bfx_id,"clean_reads_length_distribution.pdf",sep="_"),sep="/"),length_dist_plot)
+# ,width=required_width,height=required_height)
 
 
 # plot umi distribution
