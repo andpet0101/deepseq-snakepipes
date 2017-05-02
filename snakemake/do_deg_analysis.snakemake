@@ -59,9 +59,9 @@ rule prepare_deseq_config:
 					elif fields[0] == "countfile":
 						fields[1] = os.getcwd() + "/genecount/" + PROJECT + "." + REFERENCE_CFG["version"] + ".e" + ANNOTATION_CFG["version"] + ".txt"
 					elif fields[0] == "conditionfile":
-						fields[1] = os.getcwd() + "/de-analysis/"+PROJECT+".condition.csv"
+						fields[1] = PROJECT+".condition.csv"
 					elif fields[0] == "contrastfile":
-						fields[1] = fields[1] = os.getcwd() + "/de-analysis/"+PROJECT+".contrast.csv"
+						fields[1] = PROJECT+".contrast.csv"
 					elif fields[0] == "bfxid":
 						fields[1] = PROJECT
 					elif fields[0] == "species":
@@ -69,7 +69,7 @@ rule prepare_deseq_config:
 					elif fields[0] == "ensembl":
 						fields[1] = ANNOTATION_CFG["version"]
 					elif fields[0] == "plotcounts":
-						fields[1] = os.getcwd() + "/de-analysis/"+PROJECT+".genes.csv"
+						fields[1] = PROJECT+".genes.csv"
 					if line[0]=="#":
 						outstream.write(line)
 					else:
