@@ -7,6 +7,7 @@ theme_set(theme_bw(12))
 library(reshape2)
 library(dplyr)
 library(tidyr)
+library(magrittr)
 
 #############
 # Arguments #
@@ -150,11 +151,23 @@ library_row = data.frame(Library=levels(fastq_screen_result$databases$Library),R
 fastq_screen_result$databases$Row = NULL
 fastq_screen_result$databases = merge(fastq_screen_result$databases,library_row,by="Library")
 plot_size = calc_facet_plot_size(length(unique(fastq_screen_result$databases$Row)))
-database_specific_hits_plot = ggplot(fastq_screen_result$databases,aes(x=Library,y=perc_One_hit_one_library+perc_Multiple_hits_one_library,fill=Database)) + 
-	geom_bar(stat="identity",position="stack") +
+# database_specific_hits_plot = ggplot(fastq_screen_result$databases,aes(x=Library,y=perc_One_hit_one_library+perc_Multiple_hits_one_library,fill=Database)) + 
+# 	geom_bar(stat="identity",position="stack") +
+# 	theme_bw(11) +
+# 	scale_x_discrete("Library") + 
+# 	scale_y_continuous("Percentage of reads",limits=c(0,100)) +
+# 	scale_fill_manual("Database",values=color_brewer_qual_palette) +
+# 	facet_wrap(~ Row,scales="free",ncol=plot_size$num_columns) +
+# 	theme(strip.background=element_blank(),strip.text=element_blank(),legend.position="bottom",axis.text.x=element_text(angle=90,hjust=1,vjust=0.5)) +
+# 	ggtitle("Contamination: reads exclusive to database")
+
+tempdf <- fastq_screen_result$databases %>% group_by(Library) %>% summarise(v1 = sum(perc_One_hit_multiple_libraries), v2 = sum(perc_Multiple_hits_multiple_libraries)) %>% mutate(maxer = max(v1, v2))
+database_specific_hits_plot = ggplot() +
+  geom_bar(data = fastq_screen_result$databases, aes(x=Library,y=perc_One_hit_one_library+perc_Multiple_hits_one_library,fill=Database), stat = 'identity', position = 'stack') +
+  geom_bar(data = fastq_screen_result$databases, aes(x=Library,y=-1*(perc_One_hit_multiple_libraries+perc_Multiple_hits_multiple_libraries),fill=Database), stat = 'identity', position = 'stack', alpha = 0.5) +
 	theme_bw(11) +
-	scale_x_discrete("Library") + 
-	scale_y_continuous("Percentage of reads",limits=c(0,100)) +
+	scale_x_discrete("Library") +
+	scale_y_continuous("Percentage of reads",limits=c(-1*max(tempdf$maxer)-10,100)) +
 	scale_fill_manual("Database",values=color_brewer_qual_palette) +
 	facet_wrap(~ Row,scales="free",ncol=plot_size$num_columns) +
 	theme(strip.background=element_blank(),strip.text=element_blank(),legend.position="bottom",axis.text.x=element_text(angle=90,hjust=1,vjust=0.5)) +
@@ -175,7 +188,7 @@ no_hits_plot = ggplot(fastq_screen_result$no_hit,aes(x=Library,y=No_hit)) +
 	scale_y_continuous("Percentage of reads",limits=c(0,100)) +
 	facet_wrap(~ Row,scales="free",ncol=plot_size$num_columns) +
 	theme(strip.background=element_blank(),strip.text=element_blank(),legend.position="bottom",axis.text.x=element_text(angle=90,hjust=1,vjust=0.5)) +
-	ggtitle("Contamination: reads exclusive to database")
+	ggtitle("Contamination: reads not aligned to database")
 ggsave(paste(pdf_directory,paste(bfx_id,"no_hits.pdf",sep="_"),sep="/"),plot=no_hits_plot,width=plot_size$width,height=plot_size$height)
 write.table(fastq_screen_result$no_hit[,c("Library","Read","Library_read","No_hit")],paste(data_directory,paste(bfx_id,"no_hits.csv",sep="_"),sep="/"),col.names=T,row.names=F,sep="\t",quote=F)
 

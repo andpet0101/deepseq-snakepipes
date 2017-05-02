@@ -87,7 +87,7 @@ rule create_deseq_condition_contrast_csv:
 		from shutil import copyfile
 		copyfile(params.template,output[0])
 		with open(output[1], 'w') as outstream:
-			outstream.write("Sample\tCondition\n")
+			outstream.write("Sample\tCond\n")
 			for l in INPUT_CFG["libraries"]:
 				s = re.sub('^L\d+_','',l)
 				outstream.write(s+"\t\n")
