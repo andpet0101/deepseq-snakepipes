@@ -69,10 +69,10 @@ rule extract_rnaseqc_stats:
 	input:
 		"rnaseqc/index.html"
 	output:
-		"report/data/" + PROJECT + "_rnaseqc_alignment.csv",
-		"report/data/" + PROJECT + "_rnaseqc_libprofile.csv",
-		"report/" + PROJECT + "_rnaseqc_alignment.tex",
-		"report/" + PROJECT + "_rnaseqc_libprofile.tex"
+		"report/data/" + PROJECT + "_rnaseqc_alignment_rnaseqc_1.csv",
+		"report/data/" + PROJECT + "_rnaseqc_libprofile_rnaseqc_1.csv",
+		"report/" + PROJECT + "_rnaseqc_alignment_rnaseqc_1.tex",
+		"report/" + PROJECT + "_rnaseqc_libprofile_rnaseqc_1.tex"
 	log:
 		"rnaseqc/log/extract_rnaseqc_stats.log"
 	shell:
