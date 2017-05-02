@@ -9,5 +9,7 @@ then
  JAR="/share/apps/GenomeAnalysisTK/3.4-0/GenomeAnalysisTK.jar"
 fi
 
+JAR=/projects/seq-work/analysis/marvink/bfx735/GenomeAnalysisTK.jar
+
 # important: always do "$@"
 java $JAVA_OPTIONS -jar $JAR "$@"

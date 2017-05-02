@@ -25,6 +25,13 @@ if "base_recalibration_vcfs" in VARIANT_CALLING_CFG:
 else:
 	VARIANT_CALLING_CFG["base_recalibration_vcfs"] = []
 
+# bed file for target regions
+if "target_regions_bed" in VARIANT_CALLING_CFG:
+	if not os.path.exists(VARIANT_CALLING_CFG["target_regions_bed"]):
+		raise WorkflowError("Could not find file "+VARIANT_CALLING_CFG["target_regions_bed"]+" for variant_calling.target_regions_bed!")
+else:
+	VARIANT_CALLING_CFG["target_regions_bed"] = ""
+
 ###########
 # Targets #
 ###########
@@ -33,6 +40,9 @@ VARIANT_CALLING_BAM_BAI_TARGETS = []
 for s in LIBRARIES:
 	VARIANT_CALLING_BAM_BAI_TARGETS.append(ALIGNER_CFG["program"] + "/" + s + ".variant_calling.bam")
 	VARIANT_CALLING_BAM_BAI_TARGETS.append(ALIGNER_CFG["program"] + "/" + s + ".variant_calling.bai")
+	VARIANT_CALLING_BAM_BAI_TARGETS.append(ALIGNER_CFG["program"] + "/report/data/" + s + ".recal_first_pass.txt")
+	VARIANT_CALLING_BAM_BAI_TARGETS.append(ALIGNER_CFG["program"] + "/report/data/" + s + ".recal_second_pass.txt")
+	VARIANT_CALLING_BAM_BAI_TARGETS.append(ALIGNER_CFG["program"] + "/report/pdf/" + s + ".recalibration.pdf")
 
 #########
 # Rules #
@@ -64,19 +74,59 @@ rule run_GATK_BaseRecalibrator_PrintReads:
 	input:
 		bam="{aligner}/{basename}.indels.bam",
 		bai="{aligner}/{basename}.indels.bai",
-		table="{aligner}/{basename}.recal.table"
+		table="{aligner}/report/data/{basename}.recal_first_pass.txt"
 	output:
 		bam=temp("{aligner}/{basename}.recal.bam"),
 		bai=temp("{aligner}/{basename}.recal.bai")
 	log:
-		"{aligner}/log/{basename}.recal.log"
+		"{aligner}/log/{basename}.recal_print_reads.log"
+	params:
+		reference=REFERENCE_CFG["path"]+".fa"
 	shell:
 		"\n\t\t("+module_load("GenomeAnalysisTK","picard_tools")+
 		"""
 		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx2g"
-		GATK -T PrintReads -R {REFERENCE_CFG[path]}.fa -I {input.bam} -BQSR {input.table} -o {output.bam}
+		GATK -T PrintReads -R {params.reference} -I {input.bam} -BQSR {input.table} -o {output.bam}
 		picardtools BuildBamIndex I={output.bam} VALIDATION_STRINGENCY=SILENT TMP_DIR={TMP_DIR}) >& {log}
 		""" 
+
+# generate before/after recalibration plots (if recalibration vcf has been provided)
+rule run_GATK_BaseRecalibrator_generate_plots:
+	input:
+		before="{aligner}/report/data/{basename}.recal_first_pass.txt",
+		after="{aligner}/report/data/{basename}.recal_second_pass.txt"
+	output:
+		pdf="{aligner}/report/pdf/{basename}.recalibration.pdf"
+	log:
+		"{aligner}/log/{basename}.recal_plots.log"
+	params:
+		reference=REFERENCE_CFG["path"]+".fa"
+	shell:
+		"\n\t\t("+module_load("GenomeAnalysisTK","R")+
+		"""
+		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx8g"
+		GATK -T AnalyzeCovariates -R {params.reference} -before {input.before} -after {input.after} -plots {output.pdf}) >& {log}
+		"""	
+
+# run base recalibrator a second time to analyse remaining variation (if recalibration vcf has been provided)
+rule run_GATK_BaseRecalibrator_post_recalibration:
+	input:
+		bam="{aligner}/{basename}.indels.bam",
+		bai="{aligner}/{basename}.indels.bai",
+		table="{aligner}/report/data/{basename}.recal_first_pass.txt"
+	output:
+		"{aligner}/report/data/{basename}.recal_second_pass.txt"
+	log:
+		"{aligner}/log/{basename}.recal_second_pass.log"
+	params:
+		reference=REFERENCE_CFG["path"]+".fa",
+		known_sites=" -knownSites ".join(VARIANT_CALLING_CFG["base_recalibration_vcfs"])
+	shell:
+		"\n\t\t("+module_load("GenomeAnalysisTK")+
+		"""
+		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx8g"
+		GATK -T BaseRecalibrator -R {params.reference} -I {input.bam} -knownSites {params.known_sites} -BQSR {input.table} -o {output}) >& {log}
+		"""
 
 # run base recalibrator (if recalibration vcf has been provided)
 rule run_GATK_BaseRecalibrator:
@@ -85,83 +135,114 @@ rule run_GATK_BaseRecalibrator:
 		bai="{aligner}/{basename}.indels.bai",
 		check="{aligner}/vcf_integrity_check"
 	output:
-		temp("{aligner}/{basename}.recal.table")
+		"{aligner}/report/data/{basename}.recal_first_pass.txt"
 	log:
-		"{aligner}/log/{basename}.recal.log"
+		"{aligner}/log/{basename}.recal_first_pass.log"
+	params:
+		reference=REFERENCE_CFG["path"]+".fa",
+		known_sites=" -knownSites ".join(VARIANT_CALLING_CFG["base_recalibration_vcfs"])
 	shell:
 		"\n\t\t("+module_load("GenomeAnalysisTK")+
 		"""
 		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx8g"
-		GATK -T BaseRecalibrator -R {REFERENCE_CFG[path]}.fa -I {input.bam} -knownSites """+(" -knownSites ".join(VARIANT_CALLING_CFG["base_recalibration_vcfs"]))+""" -o {output}) >& {log}
+		GATK -T BaseRecalibrator -R {params.reference} -I {input.bam} -knownSites {params.known_sites} -o {output}) >& {log}
 		"""
 
 		
 # realigns indels in target intervals
-rule run_GATK_IndelRealigner:
+rule run_GATK_IndelRealigner_wgs:
 	input:
-		bam="{aligner}/{basename}.markdup.bam",
-		bai="{aligner}/{basename}.markdup.bai",
-		intervals="{aligner}/{basename}.indels.intervals"
+		bam="{aligner,^bwa|bowtie2|bowtie$}/{basename}.markdup.bam",
+		bai="{aligner,^bwa|bowtie2|bowtie$}/{basename}.markdup.bai",
+		intervals="{aligner,^bwa|bowtie2|bowtie$}/{basename}.indels.intervals"
 	output:
-		bam=temp("{aligner}/{basename}.indels.bam"),
-		bai=temp("{aligner}/{basename}.indels.bai")
+		bam=temp("{aligner,^bwa|bowtie2|bowtie$}/{basename}.indels.bam"),
+		bai=temp("{aligner,^bwa|bowtie2|bowtie$}/{basename}.indels.bai")
 	log:
 		"{aligner}/log/{basename}.indelrealign.log"
+	params:
+		reference=REFERENCE_CFG["path"]+".fa"
 	shell:
 		"\n\t\t("+module_load("GenomeAnalysisTK","picard_tools")+
 		"""
 		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx8g"
-		GATK -T IndelRealigner -R {REFERENCE_CFG[path]}.fa -I {input.bam} -targetIntervals {input.intervals} -o {output.bam} --filter_reads_with_N_cigar	
+		GATK -T IndelRealigner -R {params.reference} -I {input.bam} -targetIntervals {input.intervals} -o {output.bam} --filter_reads_with_N_cigar	
 		picardtools BuildBamIndex I={output.bam} VALIDATION_STRINGENCY=SILENT TMP_DIR={TMP_DIR}) >& {log}
 		"""
 
 # creates target intervals for indel realignment in wgs/exome data
 rule run_GATK_RealignerTargetCreator_wgs:
 	input:
-		bam="bwa/{basename}.markdup.bam",
-		bai="bwa/{basename}.markdup.bai"
+		bam="{aligner,^bwa|bowtie2|bowtie$}/{basename}.markdup.bam",
+		bai="{aligner,^bwa|bowtie2|bowtie$}/{basename}.markdup.bai"
 	output:
-		temp("bwa/{basename}.indels.intervals")
+		temp("{aligner,^bwa|bowtie2|bowtie$}/{basename}.indels.intervals")
 	log:
-		"bwa/log/{basename}.indelrealign.log"
+		"{aligner,^bwa|bowtie2|bowtie$}/log/{basename}.indelrealign.log"
+	params:
+		reference=REFERENCE_CFG["path"]+".fa"
 	shell:
 		"\n\t\t("+module_load("GenomeAnalysisTK")+
 		"""
 		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx8g"
-		GATK -T RealignerTargetCreator -R {REFERENCE_CFG[path]}.fa -I {input.bam} -o {output}) >& {log}
+		GATK -T RealignerTargetCreator -R {params.reference} -I {input.bam} -o {output}) >& {log}
+		"""
+
+rule run_GATK_IndelRealigner_rnaseq:
+	input:
+		bam="{aligner,^gsnap|STAR$}/{basename}.splitN.bam",
+		bai="{aligner,^gsnap|STAR$}/{basename}.splitN.bai",
+		intervals="{aligner,^gsnap|STAR$}/{basename}.indels.intervals"
+	output:
+		bam=temp("{aligner,^gsnap|STAR$}/{basename}.indels.bam"),
+		bai=temp("{aligner,^gsnap|STAR$}/{basename}.indels.bai")
+	log:
+		"{aligner,^gsnap|STAR$}/log/{basename}.indelrealign.log"
+	params:
+		reference=REFERENCE_CFG["path"]+".fa"
+	shell:
+		"\n\t\t("+module_load("GenomeAnalysisTK","picard_tools")+
+		"""
+		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx8g"
+		GATK -T IndelRealigner -R {params.reference} -I {input.bam} -targetIntervals {input.intervals} -o {output.bam} --filter_reads_with_N_cigar {params.target_region}	
+		picardtools BuildBamIndex I={output.bam} VALIDATION_STRINGENCY=SILENT TMP_DIR={TMP_DIR}) >& {log}
 		"""
 
 # creates target intervals for indel realignment in rnaseq data
 rule run_GATK_RealignerTargetCreator_rnaseq:
 	input:
-		bam="gsnap/{basename}.splitN.bam",
-		bai="gsnap/{basename}.splitN.bai"
+		bam="{aligner,^gsnap|STAR$}/{basename}.splitN.bam",
+		bai="{aligner,^gsnap|STAR$}/{basename}.splitN.bai"
 	output:
-		temp("gsnap/{basename}.indels.intervals")
+		temp("{aligner,^gsnap|STAR$}/{basename}.indels.intervals")
 	log:
-		"gsnap/log/{basename}.indelrealign.log"
+		"{aligner,^gsnap|STAR$}/log/{basename}.indelrealign.log"
+	params:
+		reference=REFERENCE_CFG["path"]+".fa"
 	shell:
 		"\n\t\t("+module_load("GenomeAnalysisTK")+
 		"""
 		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx8g"
-		GATK -T RealignerTargetCreator -R {REFERENCE_CFG[path]}.fa -I {input.bam} -o {output}) >& {log}
+		GATK -T RealignerTargetCreator -R {params.reference} -I {input.bam} -o {output}) >& {log}
 		"""
 
 # splits rnaseq alignments with the cigar operator N (indicating introns)
 rule run_GATK_SplitNCigarReads:
 	input:
-		bam="gsnap/{basename}.fixmate.bam",
-		bai="gsnap/{basename}.fixmate.bai"
+		bam="{aligner,^gsnap|STAR$}/{basename}.markdup.bam",
+		bai="{aligner,^gsnap|STAR$}/{basename}.markdup.bai"
 	output:
-		bam=temp("gsnap/{basename}.splitN.bam"),
-		bai=temp("gsnap/{basename}.splitN.bai")
+		bam=temp("{aligner,^gsnap|STAR$}/{basename}.splitN.bam"),
+		bai=temp("{aligner,^gsnap|STAR$}/{basename}.splitN.bai")
 	log:
-		"gsnap/log/{basename}.splitN.log"
+		"{aligner,^gsnap|STAR$}/log/{basename}.splitN.log"
+	params:
+		reference=REFERENCE_CFG["path"]+".fa"
 	shell:
 		"\n\t\t("+module_load("GenomeAnalysisTK","picard_tools")+
 		"""
 		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx8g"
-		GATK -T SplitNCigarReads -R {REFERENCE_CFG[path]}.fa -I {input.bam} -o {output.bam} -rf ReassignOneMappingQuality -RMQF 255 -RMQT 60 -U ALLOW_N_CIGAR_READS
+		GATK -T SplitNCigarReads -R {params.reference}.fa -I {input.bam} -o {output.bam} -rf ReassignOneMappingQuality -RMQF 255 -RMQT 60 -U ALLOW_N_CIGAR_READS -fixNDN
 		picardtools BuildBamIndex I={output.bam} VALIDATION_STRINGENCY=SILENT TMP_DIR={TMP_DIR}) >& {log}
 		"""
 
@@ -173,50 +254,72 @@ rule run_MarkDuplicates:
 	output:
 		bam=temp("{aligner}/{basename}.markdup.bam"),
 		bai=temp("{aligner}/{basename}.markdup.bai"),
-		csv=temp("{aligner}/{basename}.markdup.csv")
+		csv="{aligner}/report/data/{basename}.markdup.txt"
 	log:
 		"{aligner}/log/{basename}.markdup.log"
 	shell:
 		"\n\t\t("+module_load("picard_tools")+
 		"""
 		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx8g -XX:-UseGCOverheadLimit"
-		echo $JAVA_OPTIONS
-		picardtools MarkDuplicates I={input.bam} O={output.bam} M={output.csv} REMOVE_DUPLICATES=false CREATE_INDEX=true) >& {log}
+		picardtools MarkDuplicates I={input.bam} O={output.bam} M={output.csv} REMOVE_DUPLICATES=false CREATE_INDEX=true TAGGING_POLICY=All TMP_DIR={TMP_DIR} VALIDATION_STRINGENCY=SILENT) >& {log}
 		"""
 
 # fixes the mate information in wgs/exome data
 rule run_FixMateInformation_wgs:
 	input:
-		"bwa/{basename}.bam"
+		bam="{aligner,^bwa|bowtie2|bowtie$}/{basename}"+(".target_regions" if VARIANT_CALLING_CFG["target_regions_bed"] else "")+".bam",
+		bai="{aligner,^bwa|bowtie2|bowtie$}/{basename}"+(".target_regions" if VARIANT_CALLING_CFG["target_regions_bed"] else "")+".bai"
 	output:
-		bam=temp("bwa/{basename}.fixmate.bam"),
-		bai=temp("bwa/{basename}.fixmate.bai")
+		bam=temp("{aligner,^bwa|bowtie2|bowtie$}/{basename}.fixmate.bam"),
+		bai=temp("{aligner,^bwa|bowtie2|bowtie$}/{basename}.fixmate.bai")
 	log:
-		"bwa/log/{basename}.fixmate.log"
+		"{aligner,^bwa|bowtie2|bowtie$}/log/{basename}.fixmate.log"
 	shell:
 		"\n\t\t("+module_load("picard_tools")+		
 		"""
 		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx2g"
-		picardtools FixMateInformation I={input} O={output.bam} CREATE_INDEX=true VALIDATION_STRINGENCY=SILENT SO=coordinate) >& {log}
+		picardtools FixMateInformation I={input.bam} O={output.bam} CREATE_INDEX=true VALIDATION_STRINGENCY=SILENT SO=coordinate) >& {log}
 		"""
 
 
-# fixes the mate information in rnaseq data (also removes problematic reads with the tags below)
+# fixes the mate information in rnaseq data
+# removes problematic reads with the tags listed below
+# converts problematic CIGAR strings xNyI and xIyN into xDyI and xIyD, respectively 
 rule run_FixMateInformation_rnaseq:
 	input:
-		"gsnap/{basename}.bam"
+		bam="{aligner,^gsnap|STAR$}/{basename}"+(".target_regions" if VARIANT_CALLING_CFG["target_regions_bed"] else "")+".bam",
+		bai="{aligner,^gsnap|STAR$}/{basename}"+(".target_regions" if VARIANT_CALLING_CFG["target_regions_bed"] else "")+".bai"
 	output:
-		bam=temp("gsnap/{basename}.fixmate.bam"),
-		bai=temp("gsnap/{basename}.fixmate.bai")
+		bam=temp("{aligner,^gsnap|STAR$}/{basename}.fixmate.bam"),
+		bai=temp("{aligner,^gsnap|STAR$}/{basename}.fixmate.bai")
 	log:
-		"gsnap/log/{basename}.fixmate.log"
+		"{aligner,^gsnap|STAR$}/log/{basename}.fixmate.log"
 	shell:
 		"\n\t\t("+module_load("samtools","picard_tools")+
 		"""
 		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx2g"
-		samtools view -h {input} | egrep -v "XO:Z:(CT|CC|PM|PS|PI|PL|UT|HT|HM|CM|CC|UM)" | picardtools FixMateInformation I=/dev/stdin O={output.bam} CREATE_INDEX=true VALIDATION_STRINGENCY=SILENT TMP_DIR={TMP_DIR} SO=coordinate) >& {log}
+		samtools view -h {input.bam} | egrep -v "XO:Z:(CT|CC|PM|PS|PI|PL|UT|HT|HM|CM|CC|UM)" | fix_adajacent_N_I_cigar_ops.pl | picardtools FixMateInformation I=/dev/stdin O={output.bam} CREATE_INDEX=true VALIDATION_STRINGENCY=SILENT TMP_DIR={TMP_DIR} SO=coordinate) >& {log}
 		"""
 
+# this command subsets reads based on target regions
+rule run_GATK_SubsetTargetRegion_PrintReads:
+	input:
+		bam="{aligner}/{basename}.bam"
+	output:
+		bam="{aligner}/{basename}.target_regions.bam",
+		bai="{aligner}/{basename}.target_regions.bai"
+	log:
+		"{aligner}/log/{basename}.target_regions.log"
+	params:
+		reference=REFERENCE_CFG["path"]+".fa",
+		target_region="--interval_padding 1000 -L "+VARIANT_CALLING_CFG["target_regions_bed"] if VARIANT_CALLING_CFG["target_regions_bed"] else ""
+	shell:
+		"\n\t\t("+module_load("GenomeAnalysisTK")+
+		"""
+		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx2g"
+		GATK -T PrintReads -R {params.reference} -I {input.bam} -o {output.bam} {params.target_region}
+		picardtools BuildBamIndex I={output.bam} VALIDATION_STRINGENCY=SILENT TMP_DIR={TMP_DIR}) >& {log}	
+		"""
 
 # checks the integrity of the VCF files provided for recalibration
 rule check_base_recalibration_vcfs:
@@ -224,10 +327,14 @@ rule check_base_recalibration_vcfs:
 		temp("{aligner}/vcf_integrity_check")
 	log:
 		"{aligner}/log/vcf_integrity_check.log"
+	params:
+		reference=REFERENCE_CFG["path"]+".fa",
+		vcfs=" ".join(VARIANT_CALLING_CFG["base_recalibration_vcfs"])
+		
 	priority:
 		100
 	shell:
 		"\n\t\t("+module_load("GenomeAnalysisTK")+
 		"""
-		for vcf in """+(" ".join(VARIANT_CALLING_CFG["base_recalibration_vcfs"]))+""";do GATK -T ValidateVariants -R {REFERENCE_CFG[path]}.fa -V $vcf --validationTypeToExclude ALL;done) 2>&1 | tee {output} >& {log}
+		for vcf in {params.vcfs};do GATK -T ValidateVariants -R {params.reference} -V $vcf --validationTypeToExclude ALL;done) 2>&1 | tee {output} >& {log}
 		"""

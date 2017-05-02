@@ -170,7 +170,7 @@ unless(`which unbuffer`=~/^which: no unbuffer/){
 	$cmd = "unbuffer $cmd";
 }
 
-$cmd = "module load apps/snakemake;".$cmd;
+$cmd = "module load apps/snakemake || true;".$cmd;
 
 $cmd .= " --snakefile $snakefile";
 $cmd .= " --configfile $configfile" if($configfile);
