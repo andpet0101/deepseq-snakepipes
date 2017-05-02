@@ -133,10 +133,8 @@ rule run_VariantEffectPredictor:
 		"\n\t\t("+module_load("perl","samtools")+
 		"""
 		gunzip -cd {input.vcf} | perl -pe 'unless(m/^#/){{s/^chr//}}' > {input.vcf}.for_vep.vcf
-		perl {params.vep_program} -i {input.vcf}.for_vep.vcf --cache --dir {params.vep_cache} -o {output.vcf}.for_vep.vcf --vcf --stats_file stats --everything --fork ${{NSLOTS:-{threads}}} --force_overwrite --port 3337 --fasta {input.ref}	
-		mv stats.html {output.stats_html}
-		perl {params.vep_program} -i {input.vcf}.for_vep.vcf --cache --dir {params.vep_cache}  -o {output.vcf}.for_vep.csv --stats_file stats --stats_text --everything --fork ${{NSLOTS:-{threads}}} --force_overwrite --port 3337 --fasta {input.ref}
-		mv stats.txt {output.stats_txt}
+		perl {params.vep_program} -i {input.vcf}.for_vep.vcf --cache --dir {params.vep_cache} -o {output.vcf}.for_vep.vcf --vcf --stats_file gatk/{wildcards.basename}.vep --everything --fork ${{NSLOTS:-{threads}}} --force_overwrite --port 3337 --fasta {input.ref}	
+		perl {params.vep_program} -i {input.vcf}.for_vep.vcf --cache --dir {params.vep_cache}  -o {output.vcf}.for_vep.csv --stats_file gatk/{wildcards.basename}.vep --stats_text --everything --fork ${{NSLOTS:-{threads}}} --force_overwrite --port 3337 --fasta {input.ref}
 		cat {output.vcf}.for_vep.vcf | perl -pe 'unless(m/^#/){{s/^/chr/}}' | bgzip -c > {output.vcf} && tabix -p vcf {output.vcf}
 		cat {output.vcf}.for_vep.csv | convert_vep_format_to_csv.pl | gzip -c > {output.csv}) >& {log}
 		rm {input.vcf}.for_vep.vcf {output.vcf}.for_vep.vcf
