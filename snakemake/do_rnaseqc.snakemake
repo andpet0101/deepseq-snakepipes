@@ -49,7 +49,7 @@ if len(LIBRARIES) > 1:
 	RNASEQC_FILES.extend(["corrMatrixPearson.txt","corrMatrixSpearman.txt"])
 
 RNASEQC_FILES = expand("rnaseqc/{f}",f=RNASEQC_FILES)
-RNASEQC_TARGETS = RNASEQC_FILES + ["report/data/"+PROJECT+"_rnaseqc_alignment.csv","report/data/"+PROJECT+"_rnaseqc_libprofile.csv","report/"+PROJECT+"_rnaseqc_alignment.tex","report/"+PROJECT+"_rnaseqc_libprofile.tex"]
+RNASEQC_TARGETS = RNASEQC_FILES + ["report/data/"+PROJECT+"_rnaseqc_alignment_rnaseqc_1.csv","report/data/"+PROJECT+"_rnaseqc_libprofile_rnaseqc_1.csv","report/"+PROJECT+"_rnaseqc_alignment_rnaseqc_1.tex","report/"+PROJECT+"_rnaseqc_libprofile_rnaseqc_1.tex"]
 
 
 #########

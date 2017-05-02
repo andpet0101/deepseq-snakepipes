@@ -17,7 +17,7 @@ BAI_FILES = [ALIGNER_CFG["program"] + "/" + s + ".bam.bai" for s in LIBRARIES]
 FEATURECOUNTS_TABLE = "genecount/" + PROJECT + "." + REFERENCE_CFG["version"] + ".e" + ANNOTATION_CFG["version"] + ".txt"
 FEATURECOUNTS_SUMMARY ="genecount/" + PROJECT + "." + REFERENCE_CFG["version"] + ".e" + ANNOTATION_CFG["version"] + ".txt.summary"
 FEATURECOUNTS_OUT = "genecount/" + PROJECT + "." + REFERENCE_CFG["version"] + ".e" + ANNOTATION_CFG["version"] + ".out"
-FEATURECOUNTS_STATS = ["report/data/" + PROJECT + "_featureCounts_stats.csv","report/" + PROJECT + "_featureCounts_stats.tex"]
+FEATURECOUNTS_STATS = ["report/data/" + PROJECT + "_featureCounts_stats_featurecounts_1.csv","report/" + PROJECT + "_featureCounts_stats_featurecounts_1.tex"]
 FEATURECOUNTS_COMPLEXITY = ["genecount/report/data/" + PROJECT + "_featureCounts_complexity.csv","genecount/report/pdf/" + PROJECT + "_featureCounts_isoformcomplexity_complete_1.Genes.pdf","genecount/report/pdf/" + PROJECT + "_featureCounts_isoformcomplexity_added_1.Genes.pdf","genecount/report/png/" + PROJECT + "_featureCounts_isoformcomplexity_complete_1.Genes.png","genecount/report/png/" + PROJECT + "_featureCounts_isoformcomplexity_added_1.Genes.png"]
 GENECOUNTS_TARGETS = [FEATURECOUNTS_TABLE,FEATURECOUNTS_SUMMARY,FEATURECOUNTS_OUT,FEATURECOUNTS_STATS,FEATURECOUNTS_COMPLEXITY]
 
