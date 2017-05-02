@@ -77,7 +77,7 @@ rule run_fastq_screen:
 	shell:
 		"\n\t\t("+module_load("fastq_screen","bowtie2")+
 		"""
-		fastq_screen --outdir fastq_screen/ --threads ${{NSLOTS:-{threads}}} --conf {input.conf} --aligner bowtie2 --bowtie2 "--fast" --force {input.fq}) >& {log}
+		fastq_screen --outdir fastq_screen/ --threads ${{NSLOTS:-{threads}}} --conf {input.conf} --aligner bowtie2 --bowtie2 "--fast-local" --force {input.fq}) >& {log}
 		cp {output.txt} {output.csv}
 		cp {output.png} {output.png2}
 		"""

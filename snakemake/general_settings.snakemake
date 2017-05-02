@@ -225,7 +225,7 @@ def module_load(*modules):
 		module_str += " apps/"+m
 		if m in PROGRAM_CFG:
 			module_str += "/"+PROGRAM_CFG[m]
-	module_str = module_str + ";module list -l"
+	module_str = module_str + " && module list -l || true"
 	return module_str
 
 			

@@ -82,7 +82,7 @@ if CALC_GENE_COMPLEXITY==1:
 			"\n\t\t("+module_load("python","bedtools","samtools")+
 			"""
 			samtools view -F 0x100 -b {input.bam} | calculate_mappingstatistics.py -b {PROJECT} -f -m -l -o {ALIGNER_CFG[program]}/report -s Complete -i {LIBCOMPLEXITY_CFG[subsample_size]}
-			samtools view -F 0x100 -b {input.bam} | bedtools intersect {BEDTOOLS_STRAND_PARAM} -u -f 0.5 -split -a stdin -b {EXON_EXON_GTF_PARAM} | calculate_mappingstatistics.py -b {PROJECT} -f -l -o {ALIGNER_CFG[program]}/report -s Gene -i {LIBCOMPLEXITY_CFG[subsample_size]}) &> {log}
+			samtools view -F 0x100 -b {input.bam} | bedtools intersect {BEDTOOLS_STRAND_PARAM} -nonamecheck -u -f 0.5 -split -a stdin -b {EXON_EXON_GTF_PARAM} | calculate_mappingstatistics.py -b {PROJECT} -f -l -o {ALIGNER_CFG[program]}/report -s Gene -i {LIBCOMPLEXITY_CFG[subsample_size]}) &> {log}
 			"""
 else:
 	rule calculate_mapping_stats:

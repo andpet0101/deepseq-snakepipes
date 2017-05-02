@@ -141,7 +141,7 @@
 	{
 		"cpu" : "8",
 		"runtime" : "96:00:00",
-		"memory" : "60G"	
+		"memory" : "120G"	
 	},	
 	"run_GATK_VariantRecalibrator_snp" :
 	{
