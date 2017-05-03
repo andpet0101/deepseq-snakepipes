@@ -52,8 +52,8 @@ rule build_rnaseq_report_script:
 			outstream.write("export PYTHONPATH=/group/sequencing/Bfx/scripts/mathias/dsp/dsp/src:$PYTHONPATH\n\n")
 			outstream.write("/group/sequencing/Bfx/scripts/common/figures_report.py -i ../" + ALIGNER_CFG["program"] + "/report/pdf/ ../genecount/report/pdf/ ../de-analysis/pdf/ ")
 			outstream.write(" -c " + PROJECT + "_figure-report-config.csv -r . -b " + PROJECT + " -p projects/" + PROJECT + "/pdf/\n")
-			outstream.write("/group/sequencing/Bfx/scripts/common/build_report.py -r . -b " + PROJECT + " -d ../de-analysis/" + PROJECT + ".deseq-results-padj.none.csv")
-			outstream.write(" -c ../de_analysis/" + PROJECT +".condition.csv -l " + PROJECT + ".labels.csv -v " + PROJECT + ".program_versions.csv -t projects/" + PROJECT + " -s " + SPECIES + " -e " + ANNOTATION_CFG["version"] + "\n")
+			outstream.write("/group/sequencing/Bfx/scripts/common/build_report.py -r . -b " + PROJECT + " -d ../de-analysis/")
+			outstream.write(" -l " + PROJECT + ".labels.csv -v " + PROJECT + ".program_versions.csv -t projects/" + PROJECT + " -s " + SPECIES + " -e " + ANNOTATION_CFG["version"] + "\n")
 
 rule collect_program_versions:
 	input:
