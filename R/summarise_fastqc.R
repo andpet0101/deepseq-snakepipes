@@ -7,6 +7,7 @@ theme_set(theme_bw(12))
 library(reshape2)
 library(dplyr)
 library(tidyr)
+library(grid)
 
 #############
 # Arguments #
@@ -286,6 +287,9 @@ if("per_base_sequence_quality" %in% names(fastqc_result)){
 	}
 	ggsave(paste(pdf_directory,paste(bfx_id,"per_base_sequence_quality.pdf",sep="_"),sep="/"),plot=per_base_sequence_quality_plot,width=plot_size$width,height=plot_size$height)
 	write.table(fastqc_result$per_base_sequence_quality[,-3],paste(data_directory,paste(bfx_id,"per_base_sequence_quality.csv",sep="_"),sep="/"),col.names=T,row.names=F,sep="\t",quote=F)
+}else{
+	file.create(paste(data_directory,paste(bfx_id,"per_base_sequence_quality.csv",sep="_"),sep="/"))
+	ggsave(grid.text("No per base sequence quality plot possible"),file=paste(pdf_directory,paste(bfx_id,"per_base_sequence_quality.pdf",sep="_"),sep="/"))
 }
 
 # per sequence quality scores
@@ -317,6 +321,9 @@ if("per_base_sequence_quality" %in% names(fastqc_result)){
 	}
 	ggsave(paste(pdf_directory,paste(bfx_id,"per_sequence_quality_scores.pdf",sep="_"),sep="/"),plot=per_sequence_quality_scores_plot,width=plot_size$width,height=plot_size$height)
 	write.table(fastqc_result$per_sequence_quality_scores[,-3],paste(data_directory,paste(bfx_id,"per_sequence_quality_scores.csv",sep="_"),sep="/"),col.names=T,row.names=F,sep="\t",quote=F)
+}else{
+	file.create(paste(data_directory,paste(bfx_id,"per_sequence_quality_scores.csv",sep="_"),sep="/"))
+	ggsave(grid.text("No per sequence quality scores plot possible"),file=paste(pdf_directory,paste(bfx_id,"per_sequence_quality_scores.pdf",sep="_"),sep="/"))
 }
 
 # per sequence base content
@@ -362,6 +369,9 @@ if("per_base_sequence_content" %in% names(fastqc_result)){
 	}
 	ggsave(paste(pdf_directory,paste(bfx_id,"per_base_sequence_content.pdf",sep="_"),sep="/"),plot=per_base_sequence_content_plot,width=8,height=11)
 	write.table(fastqc_result$per_base_sequence_content[,-3],paste(data_directory,paste(bfx_id,"per_base_sequence_content.csv",sep="_"),sep="/"),col.names=T,row.names=F,sep="\t",quote=F)
+}else{
+	file.create(paste(data_directory,paste(bfx_id,"per_base_sequence_content.csv",sep="_"),sep="/"))
+	ggsave(grid.text("No per base sequence content plot possible"),file=paste(pdf_directory,paste(bfx_id,"per_base_sequence_content.pdf",sep="_"),sep="/"))
 }
 
 # per sequence GC content
@@ -392,6 +402,9 @@ if("per_sequence_gc_content" %in% names(fastqc_result)){
 	}
 	ggsave(paste(pdf_directory,paste(bfx_id,"per_sequence_gc_content.pdf",sep="_"),sep="/"),plot=per_sequence_gc_content_plot,width=plot_size$width,height=plot_size$height)
 	write.table(fastqc_result$per_sequence_gc_content[,-3],paste(data_directory,paste(bfx_id,"per_sequence_gc_content.csv",sep="_"),sep="/"),col.names=T,row.names=F,sep="\t",quote=F)
+}else{
+	file.create(paste(data_directory,paste(bfx_id,"per_sequence_gc_content.csv",sep="_"),sep="/"))
+	ggsave(grid.text("No per sequence GC content plot possible"),file=paste(pdf_directory,paste(bfx_id,"per_sequence_gc_content.pdf",sep="_"),sep="/"))
 }
 
 
@@ -425,7 +438,11 @@ if("per_base_n_content" %in% names(fastqc_result)){
 	}
 	ggsave(paste(pdf_directory,paste(bfx_id,"per_base_n_content.pdf",sep="_"),sep="/"),plot=per_base_n_content_plot,width=plot_size$width,height=plot_size$height)
 	write.table(fastqc_result$per_base_n_content[,-3],paste(data_directory,paste(bfx_id,"per_base_n_content.csv",sep="_"),sep="/"),col.names=T,row.names=F,sep="\t",quote=F)
+}else{
+	file.create(paste(data_directory,paste(bfx_id,"per_base_n_content.csv",sep="_"),sep="/"))
+	ggsave(grid.text("No per base N content plot possible"),file=paste(pdf_directory,paste(bfx_id,"per_base_n_content.pdf",sep="_"),sep="/"))
 }
+
 
 # sequence length distribution
 if("sequence_length_distribution" %in% names(fastqc_result)){
@@ -461,6 +478,9 @@ if("sequence_length_distribution" %in% names(fastqc_result)){
 	  }
 	ggsave(paste(pdf_directory,paste(bfx_id,"sequence_length_distribution.pdf",sep="_"),sep="/"),plot=sequence_length_distribution_plot,width=plot_size$width,height=plot_size$height)
 	write.table(fastqc_result$sequence_length_distribution[,-3],paste(data_directory,paste(bfx_id,"sequence_length_distribution.csv",sep="_"),sep="/"),col.names=T,row.names=F,sep="\t",quote=F)
+}else{
+	file.create(paste(data_directory,paste(bfx_id,"sequence_length_distribution.csv",sep="_"),sep="/"))
+	ggsave(grid.text("No sequence length distribution plot possible"),file=paste(pdf_directory,paste(bfx_id,"sequence_length_distribution.pdf",sep="_"),sep="/"))
 }
 
 # total deduplicated levels
@@ -492,6 +512,9 @@ if("total_deduplicated_levels" %in% names(fastqc_result)){
 	}
 	ggsave(paste(pdf_directory,paste(bfx_id,"total_deduplicated_levels.pdf",sep="_"),sep="/"),plot=total_deduplicated_levels_plot,width=plot_size$width,height=plot_size$height)
 	write.table(fastqc_result$total_deduplicated_levels[,-3],paste(data_directory,paste(bfx_id,"total_deduplicated_levels.csv",sep="_"),sep="/"),col.names=T,row.names=F,sep="\t",quote=F)
+}else{
+	file.create(paste(data_directory,paste(bfx_id,"total_deduplicated_levels.csv",sep="_"),sep="/"))
+	ggsave(grid.text("No total deduplicated levels plot possible"),file=paste(pdf_directory,paste(bfx_id,"total_deduplicated_levels.pdf",sep="_"),sep="/"))
 }
 
 # sequence duplication levels
@@ -527,6 +550,9 @@ if("sequence_duplication_levels" %in% names(fastqc_result)){
 	}
 	ggsave(paste(pdf_directory,paste(bfx_id,"sequence_duplication_levels.pdf",sep="_"),sep="/"),plot=sequence_duplication_levels_plot,width=plot_size$width,height=plot_size$height)
 	write.table(fastqc_result$sequence_duplication_levels[,-3],paste(data_directory,paste(bfx_id,"sequence_duplication_levels.csv",sep="_"),sep="/"),col.names=T,row.names=F,sep="\t",quote=F)
+}else{
+	file.create(paste(data_directory,paste(bfx_id,"sequence_duplication_levels.csv",sep="_"),sep="/"))
+	ggsave(grid.text("No sequence duplication levels plot possible"),file=paste(pdf_directory,paste(bfx_id,"sequence_duplication_levels.pdf",sep="_"),sep="/"))
 }
 
 
@@ -577,7 +603,11 @@ if("overrepresented_sequences" %in% names(fastqc_result)){
 
 	ggsave(paste(pdf_directory,paste(bfx_id,"overrepresented_sequences.pdf",sep="_"),sep="/"),plot=top10_overrepresented_sequences_plot,width=plot_size$width,height=plot_size$height)
 	write.table(fastqc_result$overrepresented_sequences[,-3],paste(data_directory,paste(bfx_id,"overrepresented_sequences.csv",sep="_"),sep="/"),col.names=T,row.names=F,sep="\t",quote=F)
+}else{
+	file.create(paste(data_directory,paste(bfx_id,"overrepresented_sequences.csv",sep="_"),sep="/"))
+	ggsave(grid.text("No overrepresented sequences plot possible"),file=paste(pdf_directory,paste(bfx_id,"overrepresented_sequences.pdf",sep="_"),sep="/"))
 }
+
 
 # adapter content
 if("adapter_content" %in% names(fastqc_result)){
@@ -641,6 +671,11 @@ if("adapter_content" %in% names(fastqc_result)){
 	}
 	ggsave(paste(pdf_directory,paste(bfx_id,"total_adapter_content.pdf",sep="_"),sep="/"),plot=adapter_content_plot,width=plot_size$width,height=plot_size$height)
 	write.table(spread(adapter_content_total[,-3],Adapter,Content,fill=0),paste(data_directory,paste(bfx_id,"total_adapter_content.csv",sep="_"),sep="/"),col.names=T,row.names=F,sep="\t",quote=F)
+}else{
+	file.create(paste(data_directory,paste(bfx_id,"adapter_content.csv",sep="_"),sep="/"))
+	ggsave(grid.text("No total adapter content plot possible"),file=paste(pdf_directory,paste(bfx_id,"total_adapter_content.pdf",sep="_"),sep="/"))
+	file.create(paste(data_directory,paste(bfx_id,"total_adapter_content.csv",sep="_"),sep="/"))
+	ggsave(grid.text("No adapter content plot possible"),file=paste(pdf_directory,paste(bfx_id,"adapter_content.pdf",sep="_"),sep="/"))
 }
 
 # k-mer content  - select only one kmer per position
@@ -679,6 +714,9 @@ if("kmer_content" %in% names(fastqc_result)){
 
 	ggsave(paste(pdf_directory,paste(bfx_id,"kmer_content.pdf",sep="_"),sep="/"),plot=kmer_content_plot,width=plot_size$width,height=plot_size$height)
 	write.table(fastqc_result$kmer_content[,-3],paste(data_directory,paste(bfx_id,"kmer_content.csv",sep="_"),sep="/"),col.names=T,row.names=F,sep="\t",quote=F)
+}else{
+	file.create(paste(data_directory,paste(bfx_id,"kmer_content.csv",sep="_"),sep="/"))
+	ggsave(grid.text("No kmer content plot possible"),file=paste(pdf_directory,paste(bfx_id,"kmer_content.pdf",sep="_"),sep="/"))
 }
 
 
