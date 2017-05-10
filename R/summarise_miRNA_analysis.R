@@ -1,4 +1,4 @@
-#!/usr/bin/env Rscript
+#!/usr/bin/env Rscript --vanilla
 
 library(ggplot2)
 library(plyr)
@@ -9,6 +9,7 @@ library(scales)
 library(VennDiagram)
 library(gtools)
 library(GenomicRanges)
+library(grid)
 
 #############
 # arguments #
