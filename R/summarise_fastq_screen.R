@@ -1,4 +1,4 @@
-#!/usr/bin/env Rscript
+#!/usr/bin/env Rscript --vanilla
 
 library(ggplot2)
 library(plyr)
@@ -61,7 +61,7 @@ parse_fastq_screen_file = function(fastq_screen_file){
 	fastq_screen_lines[1] = gsub("%","perc_",fastq_screen_lines[1])
 	
 	# "no hit" line
-	no_hit_line_index = grep("Hit_no_libraries",fastq_screen_lines)
+	no_hit_line_index = grep("Hit_no_genomes",fastq_screen_lines)
 	no_hit_line = fastq_screen_lines[no_hit_line_index]
 	fastq_screen_result[["No_hit"]] = as.double(gsub("^\\S+\\s+","",no_hit_line,perl=TRUE))
 	fastq_screen_lines = fastq_screen_lines[-no_hit_line_index]
@@ -145,13 +145,13 @@ for(t in c("databases","no_hit")){
 	fastq_screen_result[[t]] = fastq_screen_result[[t]][,col_names]
 }
 
-# plot database distribution (only perc_One_hit_one_library and perc_Multiple_hits_one_library)
+# plot database distribution (only perc_One_hit_one_genome and perc_Multiple_hits_one_genome)
 libraries_per_row = 20
 library_row = data.frame(Library=levels(fastq_screen_result$databases$Library),Row=ceiling(1:length(levels(fastq_screen_result$databases$Library))/libraries_per_row))
 fastq_screen_result$databases$Row = NULL
 fastq_screen_result$databases = merge(fastq_screen_result$databases,library_row,by="Library")
 plot_size = calc_facet_plot_size(length(unique(fastq_screen_result$databases$Row)))
-# database_specific_hits_plot = ggplot(fastq_screen_result$databases,aes(x=Library,y=perc_One_hit_one_library+perc_Multiple_hits_one_library,fill=Database)) + 
+# database_specific_hits_plot = ggplot(fastq_screen_result$databases,aes(x=Library,y=perc_One_hit_one_genome+perc_Multiple_hits_one_genome,fill=Database)) + 
 # 	geom_bar(stat="identity",position="stack") +
 # 	theme_bw(11) +
 # 	scale_x_discrete("Library") + 
@@ -161,10 +161,10 @@ plot_size = calc_facet_plot_size(length(unique(fastq_screen_result$databases$Row
 # 	theme(strip.background=element_blank(),strip.text=element_blank(),legend.position="bottom",axis.text.x=element_text(angle=90,hjust=1,vjust=0.5)) +
 # 	ggtitle("Contamination: reads exclusive to database")
 
-tempdf <- fastq_screen_result$databases %>% group_by(Library) %>% summarise(v1 = sum(perc_One_hit_multiple_libraries), v2 = sum(perc_Multiple_hits_multiple_libraries)) %>% mutate(maxer = max(v1, v2))
+tempdf <- fastq_screen_result$databases %>% group_by(Library) %>% summarise(v1 = sum(perc_One_hit_multiple_genomes), v2 = sum(perc_Multiple_hits_multiple_genomes)) %>% mutate(maxer = max(v1, v2))
 database_specific_hits_plot = ggplot() +
-  geom_bar(data = fastq_screen_result$databases, aes(x=Library,y=perc_One_hit_one_library+perc_Multiple_hits_one_library,fill=Database), stat = 'identity', position = 'stack') +
-  geom_bar(data = fastq_screen_result$databases, aes(x=Library,y=-1*(perc_One_hit_multiple_libraries+perc_Multiple_hits_multiple_libraries),fill=Database), stat = 'identity', position = 'stack', alpha = 0.5) +
+  geom_bar(data = fastq_screen_result$databases, aes(x=Library,y=perc_One_hit_one_genome+perc_Multiple_hits_one_genome,fill=Database), stat = 'identity', position = 'stack') +
+  geom_bar(data = fastq_screen_result$databases, aes(x=Library,y=-1*(perc_One_hit_multiple_genomes+perc_Multiple_hits_multiple_genomes),fill=Database), stat = 'identity', position = 'stack', alpha = 0.5) +
 	theme_bw(11) +
 	scale_x_discrete("Library") +
 	scale_y_continuous("Percentage of reads",limits=c(-1*max(tempdf$maxer)-10,100)) +
@@ -174,7 +174,7 @@ database_specific_hits_plot = ggplot() +
 	ggtitle("Contamination: reads exclusive to database")
 
 ggsave(paste(pdf_directory,paste(bfx_id,"contamination_database_specific_hits.pdf",sep="_"),sep="/"),plot=database_specific_hits_plot,width=plot_size$width,height=plot_size$height)
-write.table(spread(fastq_screen_result$databases[,c("Library","Read","Library_read","Database","perc_One_hit_one_library")],Database,perc_One_hit_one_library,fill=0),paste(data_directory,paste(bfx_id,"contamination_database_specific_hits.csv",sep="_"),sep="/"),col.names=T,row.names=F,sep="\t",quote=F)
+write.table(spread(fastq_screen_result$databases[,c("Library","Read","Library_read","Database","perc_One_hit_one_genome")],Database,perc_One_hit_one_genome,fill=0),paste(data_directory,paste(bfx_id,"contamination_database_specific_hits.csv",sep="_"),sep="/"),col.names=T,row.names=F,sep="\t",quote=F)
 
 # plot No_hit stats
 libraries_per_row = 20

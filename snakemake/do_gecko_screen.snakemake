@@ -204,7 +204,7 @@ rule do_mageck_rra_test:
 	params:
 		controls=lambda wildcards: GECKO_CFG["experiments"][wildcards.experiment]["controls"],
 		treatments=lambda wildcards: GECKO_CFG["experiments"][wildcards.experiment]["treatments"],
-		remove_zero=lambda wildcards: "both" if GECKO_CFG["experiments"][wildcards.experiment]["selection"] == "positive" else "none"
+		remove_zero=lambda wildcards: "none" if GECKO_CFG["experiments"][wildcards.experiment]["selection"] == "positive" else "none"
 	shell:
 		"\n\t\t("+module_load("mageck","R")+		
 		"""
@@ -267,7 +267,7 @@ rule rescue_gecko_sgRNA_reads:
 	shell:
 		"""
 		#cp {input.fq} {output}
-		rescue_gecko_sgRNA_reads.pl {input.fq} {input.csv} | gzip -c > {output}
+		(rescue_gecko_sgRNA_reads.pl {input.fq} {input.csv} | gzip -c > {output}) >& {log}
 		"""
 
 rule list_control_sgRNAs:
