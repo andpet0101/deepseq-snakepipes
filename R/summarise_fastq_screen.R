@@ -170,8 +170,9 @@ plot_size = calc_facet_plot_size(length(unique(fastq_screen_result$databases$Row
 tempdf <- fastq_screen_result$databases %>% group_by(Library) %>% summarise(v1 = sum(perc_One_hit_multiple_genomes), v2 = sum(perc_Multiple_hits_multiple_genomes)) %>% mutate(maxer = max(v1, v2))
 database_specific_hits_plot = ggplot() +
   geom_bar(data = fastq_screen_result$databases, aes(x=Library,y=perc_One_hit_one_genome+perc_Multiple_hits_one_genome,fill=Database), stat = 'identity', position = 'stack') +
-  geom_bar(data = fastq_screen_result$databases, aes(x=Library,y=-1*(perc_One_hit_multiple_genomes+perc_Multiple_hits_multiple_genomes),fill=Database), stat = 'identity', position = 'stack', alpha = 0.5) +
+  geom_bar(data = fastq_screen_result$databases, aes(x=Library,y=-1*(perc_One_hit_multiple_genomes+perc_Multiple_hits_multiple_genomes),fill=Database), stat = 'identity', position = 'stack', alpha = 0.3) +
 	theme_bw(11) +
+	geom_hline(yintercept = 0) +
 	scale_x_discrete("Library") +
 	scale_y_continuous("Percentage of reads",limits=c(-1*max(tempdf$maxer)-10,100)) +
 	scale_fill_manual("Database",values=color_brewer_qual_palette) +
@@ -180,7 +181,10 @@ database_specific_hits_plot = ggplot() +
 	ggtitle("Contamination: reads exclusive to database")
 
 ggsave(paste(pdf_directory,paste(bfx_id,"contamination_database_specific_hits.pdf",sep="_"),sep="/"),plot=database_specific_hits_plot,width=plot_size$width,height=plot_size$height)
-write.table(spread(fastq_screen_result$databases[,c("Library","Read","Library_read","Database","perc_One_hit_one_genome")],Database,perc_One_hit_one_genome,fill=0),paste(data_directory,paste(bfx_id,"contamination_database_specific_hits.csv",sep="_"),sep="/"),col.names=T,row.names=F,sep="\t",quote=F)
+
+one_genome_hits_table = data.frame(fastq_screen_result$databases[,c("Library","Read","Library_read","Database","Reads_processed")],
+		hits=fastq_screen_result$databases$One_hit_one_genome+fastq_screen$databases$Multiple_hits_one_genome)
+write.table(spread(one_genome_hits_table,Database,hits,fill=0),paste(data_directory,paste(bfx_id,"contamination_database_specific_hits.csv",sep="_"),sep="/"),col.names=T,row.names=F,sep="\t",quote=F)
 
 # plot No_hit stats
 libraries_per_row = 20
