@@ -95,17 +95,21 @@ rule do_SNV_calling:
 
 
 # decide which annotation steps should be done
-rule annotate_SNV_variants:
+rule finalise_SNV_variants:
 	input:
 		vcf="gatk/{basename}."+("vep" if VARIANT_CALLING_CFG["vep_cache"] else "dbsnp" if VARIANT_CALLING_CFG["snv_db_vcf"] else "filt")+".vcf.gz",
 		tbi="gatk/{basename}."+("vep" if VARIANT_CALLING_CFG["vep_cache"] else "dbsnp" if VARIANT_CALLING_CFG["snv_db_vcf"] else "filt")+".vcf.gz.tbi"
 	output:
 		vcf="gatk/{basename}.final.vcf.gz",
 		tbi="gatk/{basename}.final.vcf.gz.tbi"
+	params:
+		reference=REFERENCE_CFG["path"]+".fa",
+		target_region="-L "+VARIANT_CALLING_CFG["target_regions_bed"] if VARIANT_CALLING_CFG["target_regions_bed"] else ""
 	shell:
+		"\n\t\t("+module_load("GenomeAnalysisTK")+
 		"""
-		cp {input.vcf} {output.vcf}
-		cp {input.tbi} {output.tbi}
+		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx2G"
+		GATK -T SelectVariants --excludeFiltered -R {params.reference} -V {input.vcf} -o {output.vcf} {params.target_region}
 		"""
 
 

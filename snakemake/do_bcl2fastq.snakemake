@@ -18,8 +18,9 @@ rule do_all:
 
 rule run_bcl2fastq:
 	output:
-		done = pipelining+longid+'/{pipeid}/bcl2fastq.done',
-		log = fq_storage+longid+'/stats/{pipeid}/nohup.out'
+		done = pipelining+longid+'/{pipeid}/bcl2fastq.done'
+	log:
+		fq_storage+longid+'/stats/{pipeid}/nohup.out'
 	params:
 		csvpath = lambda wildcards: bcl_cfg[wildcards.pipeid]['csvpath'],
 		mismatchstring = lambda wildcards: bcl_cfg[wildcards.pipeid]['mismatches'],
@@ -28,7 +29,7 @@ rule run_bcl2fastq:
 	shell:
 		"""
 		module load apps/bcl2fastq/{bcl2fastqversion}
-		bcl2fastq -R {sequencing}{longid} --interop-dir {fq_storage}{longid}/stats/{wildcards.pipeid}/InterOp --sample-sheet {params.csvpath} -o {pipelining}{longid}/{wildcards.pipeid} --stats-dir {fq_storage}{longid}/stats/{wildcards.pipeid} --reports-dir {fq_storage}{longid}/stats/{wildcards.pipeid}/reports --barcode-mismatches {params.mismatchstring} {params.basesmaskstring} {params.additionalstring} >& {output.log}
+		bcl2fastq -R {sequencing}{longid} --interop-dir {fq_storage}{longid}/stats/{wildcards.pipeid}/InterOp --sample-sheet {params.csvpath} -o {pipelining}{longid}/{wildcards.pipeid} --stats-dir {fq_storage}{longid}/stats/{wildcards.pipeid} --reports-dir {fq_storage}{longid}/stats/{wildcards.pipeid}/reports --barcode-mismatches {params.mismatchstring} {params.basesmaskstring} {params.additionalstring} >& {log}
 		touch {output.done}
 		"""
 
