@@ -75,7 +75,7 @@ SNV_CALLING_TARGETS = []
 if ALIGNER_CFG["program"] == "gsnap":
 	SNV_CALLING_TARGETS.append("gatk/RNAseq_SNVs.final.vcf.gz")
 	SNV_CALLING_TARGETS.append("gatk/RNAseq_SNVs.final.vcf.gz.tbi")
-elif ALIGNER_CFG["program"] == "bwa" or ALIGNER_CFG["program"] == "bowtie1":
+elif ALIGNER_CFG["program"] == "bwa" or ALIGNER_CFG["program"] == "bowtie1" or ALIGNER_CFG["program"] == "bowtie2":
 	SNV_CALLING_TARGETS.append("gatk/DNAseq_SNVs.final.vcf.gz")
 	SNV_CALLING_TARGETS.append("gatk/DNAseq_SNVs.final.vcf.gz.tbi")
 
@@ -102,14 +102,10 @@ rule finalise_SNV_variants:
 	output:
 		vcf="gatk/{basename}.final.vcf.gz",
 		tbi="gatk/{basename}.final.vcf.gz.tbi"
-	params:
-		reference=REFERENCE_CFG["path"]+".fa",
-		target_region="-L "+VARIANT_CALLING_CFG["target_regions_bed"] if VARIANT_CALLING_CFG["target_regions_bed"] else ""
 	shell:
-		"\n\t\t("+module_load("GenomeAnalysisTK")+
 		"""
-		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx2G"
-		GATK -T SelectVariants --excludeFiltered -R {params.reference} -V {input.vcf} -o {output.vcf} {params.target_region}
+		cp {input.vcf} {output.vcf}
+		cp {input.tbi} {output.tbi}
 		"""
 
 
@@ -186,10 +182,16 @@ rule filter_SNVs_rnaseq:
 	output:
 		vcf="gatk/RNAseq_SNVs.filt.vcf.gz",
 		tbi="gatk/RNAseq_SNVs.filt.vcf.gz.tbi"
+	log:
+		"gatk/log/RNAseq_SNVs.variantfiltration.log"
+	params:
+		reference=REFERENCE_CFG["path"]+".fa",
+		target_region="-L "+VARIANT_CALLING_CFG["target_regions_bed"] if VARIANT_CALLING_CFG["target_regions_bed"] else ""
 	shell:
+		"\n\t\t("+module_load("GenomeAnalysisTK")+
 		"""
-		cp {input.vcf} {output.vcf}
-		cp {input.tbi} {output.tbi}
+		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx2G"
+		GATK -T SelectVariants --excludeFiltered -R {params.reference} -V {input.vcf} -o {output.vcf} {params.target_region}) 2>> {log} 1>&2
 		"""
 
 
@@ -246,10 +248,16 @@ rule filter_SNVs_wgs:
 	output:
 		vcf="gatk/DNAseq_SNVs.filt.vcf.gz",
 		tbi="gatk/DNAseq_SNVs.filt.vcf.gz.tbi"
+	log:
+		"gatk/log/DNAseq_SNVs.variantfiltration.log"
+	params:
+		reference=REFERENCE_CFG["path"]+".fa",
+		target_region="-L "+VARIANT_CALLING_CFG["target_regions_bed"] if VARIANT_CALLING_CFG["target_regions_bed"] else ""
 	shell:
+		"\n\t\t("+module_load("GenomeAnalysisTK")+
 		"""
-		cp {input.vcf} {output.vcf}
-		cp {input.tbi} {output.tbi}		
+		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx2G"
+		GATK -T SelectVariants --excludeFiltered -R {params.reference} -V {input.vcf} -o {output.vcf} {params.target_region}) 2>> {log} 1>&2
 		"""
 
 # for wgs/exome data: hard filtering (if recalibration files are not available)

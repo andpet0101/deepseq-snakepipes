@@ -40,9 +40,9 @@ bfx_id = arguments[1]
 data_directory = arguments[2]
 pdf_directory = arguments[3]
 
-bfx_id = "bfx763"
-data_directory = "fastqc/report/data"
-pdf_directory = "fastqc/report/pdf"
+#bfx_id = "bfx763"
+#data_directory = "fastqc/report/data"
+#pdf_directory = "fastqc/report/pdf"
 
 #############
 # Functions #

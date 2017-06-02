@@ -46,7 +46,7 @@ rule calculate_featureCounts_isoformcomplexity:
 	shell:
 		"\n\t\t("+module_load("python")+
 		"""
-		calculate_isoformcomplexity.py -f {input.table} -s {input.summary} -r {LIBCOMPLEXITY_CFG[gene_relation_txt]} -b {PROJECT} -i {LIBCOMPLEXITY_CFG[subsample_size]} -o genecount/report -c Genes) >& {log}
+		calculate_isoformcomplexity.py -f {input.table} -s {input.summary} -r {LIBCOMPLEXITY_CFG[gene_relation_txt]} -b {PROJECT} -i {LIBCOMPLEXITY_CFG[subsample_size]} -o genecount/report -c Genes -d 12) >& {log}
 		"""
 
 rule extract_featureCounts_stats:
