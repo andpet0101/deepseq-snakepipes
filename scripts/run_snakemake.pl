@@ -200,7 +200,7 @@ if($host=~/^login-0-0/){
 
 	# pass remaining cluster configuration
 	if($cluster_configfile){
-		$cmd .= " -S {cluster.shell} -q ngs.q -l h_rt={cluster.runtime} -l mem_free={cluster.memory} -l {cluster.other_resources} -pe smp {cluster.cpu} \" --cluster-config $cluster_configfile";
+		$cmd .= " -S {cluster.shell} -q {cluster.queue} -l h_rt={cluster.runtime} -l mem_free={cluster.memory} -l {cluster.other_resources} -pe smp {cluster.cpu} \" --cluster-config $cluster_configfile";
 	}else{
 		$cmd .= "\"";
 	}

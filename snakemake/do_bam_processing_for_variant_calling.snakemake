@@ -63,7 +63,7 @@ rule run_GATK_BaseRecalibrator_PrintReads:
 	input:
 		bam="{aligner}/{basename}.indels.bam",
 		bai="{aligner}/{basename}.indels.bai",
-		table="{aligner}/{basename}.recal.table"
+		table="{aligner}/report/data/"+PROJECT+"_{basename}.recal.txt"
 	output:
 		bam=temp("{aligner}/{basename}.recal.bam"),
 		bai=temp("{aligner}/{basename}.recal.bai")
@@ -82,7 +82,7 @@ rule run_GATK_BaseRecalibrator:
 		bai="{aligner}/{basename}.indels.bai",
 		check="{aligner}/vcf_integrity_check"
 	output:
-		temp("{aligner}/{basename}.recal.table")
+		temp("{aligner}/report/data/"+PROJECT+"_{basename}.recal.txt")
 	log:
 		"{aligner}/log/{basename}.recal.log"
 	shell:
@@ -160,7 +160,7 @@ rule run_MarkDuplicates:
 	output:
 		bam=temp("{aligner}/{basename}.markdup.bam"),
 		bai=temp("{aligner}/{basename}.markdup.bai"),
-		csv=temp("{aligner}/{basename}.markdup.csv")
+		csv="{aligner}/report/data/"+PROJECT+"_{basename}.markdup.csv"
 	log:
 		"{aligner}/log/{basename}.markdup.log"
 	shell:

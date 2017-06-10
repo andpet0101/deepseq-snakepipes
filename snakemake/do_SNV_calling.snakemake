@@ -93,6 +93,25 @@ rule do_SNV_calling:
 		"gatk/"+("DNAseq" if ALIGNER_CFG["program"] == "bwa" else "RNAseq")+"_SNVs.final.vcf.gz",
 		"gatk/"+("DNAseq" if ALIGNER_CFG["program"] == "bwa" else "RNAseq")+"_SNVs.final.vcf.gz.tbi"
 
+# collect summary report
+rule run_VariantEval:
+	input:
+		vcf="gatk/{basename}_SNVs.final.vcf.gz",
+		tbi="gatk/{basename}_SNVs.final.vcf.gz.tbi"
+	output:
+		report="gatk/"+PROJECT+"_{basename}_SNVs.varianteval.txt"
+	log:
+		log="gatk/log/{basename}.run_VariantEval.log"
+	params:
+		reference=REFERENCE_CFG["path"]+".fa",
+		dbsnp="--dbsnp "+VARIANT_CALLING_CFG["snv_db_vcf"] if "snv_db_vcf" in VARIANT_CALLING_CFG else ""
+	shell:
+		"\n\t\t("+module_load("GenomeAnalysisTK")+
+		"""
+		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx2G"
+                GATK -T VariantEval -R {params.reference} -o {output} --eval {input.vcf} {params.dbsnp}
+		"""
+
 
 # decide which annotation steps should be done
 rule finalise_SNV_variants:
@@ -118,9 +137,9 @@ rule run_VariantEffectPredictor:
 	output:
 		vcf="gatk/{basename}.vep.vcf.gz",
 		tbi="gatk/{basename}.vep.vcf.gz.tbi",
-		csv="gatk/{basename}.vep.csv.gz",
-		stats_txt="gatk/{basename}.vep.txt",
-		stats_html="gatk/{basename}.vep.html"
+		csv="gatk/report/data/"+PROJECT+"_{basename}.vep.csv.gz",
+		stats_txt="gatk/report/data/"+PROJECT+"_{basename}.vep.txt",
+		stats_html="gatk/report/html/"+PROJECT+"_{basename}.vep.html"
 	log:
 		"gatk/log/{basename}.run_VariantEffectPredictor.log"
 	params:
@@ -287,8 +306,8 @@ rule run_GATK_ApplyRecalibration_indels:
 	input:
 		vcf="gatk/DNAseq_SNVs."+("recal_snp" if VARIANT_CALLING_CFG["snp_recalibration_vcfs"] else "raw")+".vcf.gz",
 		tbi="gatk/DNAseq_SNVs."+("recal_snp" if VARIANT_CALLING_CFG["snp_recalibration_vcfs"] else "raw")+".vcf.gz.tbi",
-		recal="gatk/report/data/DNAseq_SNVs.indels.recal.txt",
-		tranches="gatk/report/data/DNAseq_SNVs.indels.tranches"
+		recal="gatk/report/data/"+PROJECT+"_DNAseq_SNVs.indels.recal.txt",
+		tranches="gatk/report/data/"+PROJECT+"_DNAseq_SNVs.indels.tranches"
 	output:
 		vcf=temp("gatk/DNAseq_SNVs.recal_indels.vcf.gz"),
 		tbi=temp("gatk/DNAseq_SNVs.recal_indels.vcf.gz.tbi")
@@ -311,9 +330,9 @@ rule run_GATK_VariantRecalibrator_indels:
 		tbi="gatk/DNAseq_SNVs."+("recal_snp" if VARIANT_CALLING_CFG["snp_recalibration_vcfs"] else "raw")+".vcf.gz.tbi",
 		check="gatk/vcf_integrity_check"
 	output:
-		recal="gatk/report/data/DNAseq_SNVs.indels.recal.txt",
-		tranches="gatk/report/data/DNAseq_SNVs.indels.tranches",
-		plot="gatk/report/pdf/DNAseq_SNVs.indels.recal.R.pdf"
+		recal="gatk/report/data/"+PROJECT+"_DNAseq_SNVs.indels.recal.txt",
+		tranches="gatk/report/data/"+PROJECT+"_DNAseq_SNVs.indels.tranches",
+		plot="gatk/report/pdf/"+PROJECT+"_DNAseq_SNVs.indels.recal.R.pdf"
 	log:
 		"gatk/log/DNAseq_SNVs.variantrecalibrator.log"
 	params:
@@ -333,8 +352,8 @@ rule run_GATK_ApplyRecalibration_snp:
 	input:
 		vcf="gatk/DNAseq_SNVs.raw.vcf.gz",
 		tbi="gatk/DNAseq_SNVs.raw.vcf.gz.tbi",
-		recal="gatk/report/data/DNAseq_SNVs.snp.recal.txt",
-		tranches="gatk/report/data/DNAseq_SNVs.snp.tranches"
+		recal="gatk/report/data/"+PROJECT+"_DNAseq_SNVs.snp.recal.txt",
+		tranches="gatk/report/data/"+PROJECT+"_DNAseq_SNVs.snp.tranches"
 	output:
 		vcf=temp("gatk/DNAseq_SNVs.recal_snp.vcf.gz"),
 		tbi=temp("gatk/DNAseq_SNVs.recal_snp.vcf.gz.tbi")
@@ -357,9 +376,9 @@ rule run_GATK_VariantRecalibrator_snp:
 		tbi="gatk/DNAseq_SNVs.raw.vcf.gz.tbi",
 		check="gatk/vcf_integrity_check"
 	output:
-		recal="gatk/report/data/DNAseq_SNVs.snp.recal.txt",
-		tranches="gatk/report/data/DNAseq_SNVs.snp.tranches",
-		plot="gatk/report/pdf/DNAseq_SNVs.snp.recal.R.pdf"
+		recal="gatk/report/data/"+PROJECT+"_DNAseq_SNVs.snp.recal.txt",
+		tranches="gatk/report/data/"+PROJECT+"_DNAseq_SNVs.snp.tranches",
+		plot="gatk/report/pdf/"+PROJECT+"_DNAseq_SNVs.snp.recal.R.pdf"
 	log:
 		"gatk/log/DNAseq_SNVs.variantrecalibrator.log"
 	params:

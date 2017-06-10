@@ -40,9 +40,9 @@ bfx_id = arguments[1]
 data_directory = arguments[2]
 pdf_directory = arguments[3]
 
-#bfx_id = "bfx763"
-#data_directory = "fastqc/report/data"
-#pdf_directory = "fastqc/report/pdf"
+bfx_id = "bfx735"
+data_directory = "fastqc/report/data"
+pdf_directory = "fastqc/report/pdf"
 
 #############
 # Functions #
@@ -228,11 +228,14 @@ for(t in names(fastqc_result)){
 }
 
 # do some minor data fixing
+fastqc_result$summary$Status = factor(fastqc_result$summary$Status,levels=c("pass","warn","fail"))
+fastqc_result$summary$Metric = factor(fastqc_result$summary$Metric,levels=unique(fastqc_result$summary$Metric))
 fastqc_result$per_base_sequence_quality$Base = factor(fastqc_result$per_base_sequence_quality$Base,levels=unique(fastqc_result$per_base_sequence_quality$Base),ordered=T)
 fastqc_result$per_base_sequence_content$Base = factor(fastqc_result$per_base_sequence_content$Base,levels=unique(fastqc_result$per_base_sequence_content$Base),ordered=T)
 fastqc_result$per_base_n_content$Base = factor(fastqc_result$per_base_n_content$Base,levels=unique(fastqc_result$per_base_n_content$Base),ordered=T)
 fastqc_result$adapter_content$Position = factor(fastqc_result$adapter_content$Position,levels=levels(fastqc_result$per_base_n_content$Base))
 fastqc_result$kmer_content$Max.Obs.Exp.Position = factor(fastqc_result$kmer_content$Max.Obs.Exp.Position,levels=unique(fastqc_result$kmer_content$Max.Obs.Exp.Position))
+fastqc_result$sequence_length_distribution$Length = factor(fastqc_result$sequence_length_distribution$Length,levels=unique(fastqc_result$sequence_length_distribution$Length))
 
 fastqc_result$per_sequence_quality_scores = fastqc_result$per_sequence_quality_scores %>% group_by(Library_read) %>% mutate(Fraction=Count/sum(Count+1)) %>% as.data.frame()
 fastqc_result$per_base_n_content = fastqc_result$per_base_n_content %>% group_by(Library_read) %>% mutate(Fraction=N.Count/sum(N.Count+1)) %>% as.data.frame()
@@ -248,8 +251,6 @@ too_many_datasets = length(fastqc_files) > 20
 
 
 # summary (note: fastqc_result$summary = fastqc_result[['summary']])
-fastqc_result$summary$Status = factor(fastqc_result$summary$Status,levels=c("pass","warn","fail"))
-fastqc_result$summary$Metric = factor(fastqc_result$summary$Metric,levels=unique(fastqc_result$summary$Metric))
 num_plots = length(unique(fastqc_result$summary$Read))
 plot_size = list(num_columns = num_plots,num_rows=1,height=8,width=ifelse(num_plots==1,8,12))
 
@@ -366,14 +367,12 @@ if("per_base_sequence_content" %in% names(fastqc_result)){
 		facet_wrap(~Library_read,scales="free_x",ncol=plot_size$num_columns) +
 		theme(legend.position="bottom",axis.text.x=element_text(angle=45,vjust=1,hjust=1))
 	} else {
-		num_plots = unique(length(per_base_sequence_content_m$Library))*unique(length(per_base_sequence_content_m$AbsBase))
-		plot_size = calc_facet_plot_size(length(unique(per_base_sequence_content_m$Library)))
-		plot_size$height = 11
+		per_base_sequence_content_m = per_base_sequence_content_m %>% group_by(Read,Base,Nt) %>% summarise(Percent = mean(Percent)) %>% as.data.frame()
 		per_base_sequence_content_plot = ggplot(per_base_sequence_content_m,aes(x=Base,y=Percent,colour=Nt,fill=Nt,group=paste0(Read,Base,Nt))) +
 		geom_bar(position="stack",stat="identity") +
 		theme_bw(10) +
 		scale_x_discrete("Position in read (bp)",limits=x_axis_breaks,breaks=x_axis_breaks,labels=x_axis_labels,expand=c(0,0)) +
-		scale_y_continuous("Reads",expand=c(0,0)) +
+		scale_y_continuous("Percentage of reads",expand=c(0,0)) +
 		scale_fill_manual("Nt",values=c("#1f78b4","#e31a1c","#6a3d9a","#33a02c")) +
 		scale_colour_manual("Nt",values=c("#1f78b4","#e31a1c","#6a3d9a","#33a02c")) +
 		facet_grid(~Read) +
@@ -458,6 +457,8 @@ if("per_base_n_content" %in% names(fastqc_result)){
 
 # sequence length distribution
 if("sequence_length_distribution" %in% names(fastqc_result)){
+	x_axis_breaks = levels(fastqc_result$sequence_length_distribution$Length)
+	x_axis_labels = sapply(1:length(x_axis_breaks),function(x){ifelse(x%%5==1,x_axis_breaks[x],"")})
 	num_plots = length(unique(fastqc_result$sequence_length_distribution$Read))
 	plot_size = list(num_columns = num_plots,num_rows=1,height=8,width=ifelse(num_plots==1,8,12))
 	num_columns = plot_size$num_columns
@@ -468,7 +469,7 @@ if("sequence_length_distribution" %in% names(fastqc_result)){
 		geom_line() +
 		geom_point() +
 		theme_bw(12) +
-		scale_x_continuous("Length",limits=c(0,max(fastqc_result$sequence_length_distribution$Length))) +
+		scale_x_continuous("Length",limits=x_axis_breaks,breaks=x_axis_breaks,labels=x_axis_labels) +
 		scale_y_continuous("Fraction of reads",limits=c(0,1)) +
 		scale_colour_manual("Library",values=color_brewer_qual_palette) +
 		facet_wrap(~Read,ncol=plot_size$num_columns,scales="free_x") +
@@ -480,7 +481,7 @@ if("sequence_length_distribution" %in% names(fastqc_result)){
 		geom_boxplot(fill="yellow") +
 		geom_point(data=mean_sequence_length_distribution_fraction,aes(x=Length,y=Fraction,group=1),colour="red",shape=3) +	
 		theme_bw(12) +
-		scale_x_continuous("Length",limits=c(0,max(fastqc_result$sequence_length_distribution$Length))) +
+		scale_x_discrete("Length",limits=x_axis_breaks,breaks=x_axis_breaks,labels=x_axis_labels) +
 		scale_y_continuous("Fraction of reads",limits=c(0,1)) +
 		scale_colour_manual("Library",values=color_brewer_qual_palette) +
 		facet_wrap(~Read,ncol=plot_size$num_columns,scales="free_x") +
