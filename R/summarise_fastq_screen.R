@@ -98,7 +98,9 @@ calc_facet_plot_size = function(num_plots,max_plots=20){
 		width = num_columns*3 # 9
 		height = num_rows*4 # 12	
 	} else{
-		num_columns = 4
+		if(num_plots<20){num_columns = 4}
+		else if(num_plots<30){num_columns = 5}
+		else{num_columns = 6}
 		num_rows = ceiling(num_plots/num_columns)
 		width = num_columns*3.5 # 8
 		height = num_rows*4 # 12

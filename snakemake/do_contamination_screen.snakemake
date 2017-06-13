@@ -16,29 +16,14 @@ if "databases" not in CONTAMINATION_CFG:
 if len(CONTAMINATION_CFG["databases"].keys()) == 0:
 	raise WorkflowError("Please specify a putative contamination species!")
 
-if "aligner" in CONTAMINATION_CFG:
-	if CONTAMINATION_CFG["aligner"] not in ["bowtie2","bwa","bowtie"]:
-		raise WorkflowError("Only the aligner bowtie, bowtie2 and bwa are support for the contamination screen workflow!")
-else:
-	CONTAMINATION_CFG["aligner"] = "bowtie2"
 
+CONTAMINATION_CFG["aligner"] = "bwa"
 
 for species in list(CONTAMINATION_CFG["databases"].keys()):
-	if CONTAMINATION_CFG["aligner"] == "bowtie2":
-		if not os.path.exists(CONTAMINATION_CFG["databases"][species]+".1.bt2") and os.path.exists("/projects/seq-work/user/pipeline/bowtie2/"+CONTAMINATION_CFG["databases"][species]+".1.bt2"):
-			CONTAMINATION_CFG["databases"][species] = "/projects/seq-work/user/pipeline/bowtie2/"+CONTAMINATION_CFG["databases"][species]
-		if not os.path.exists(CONTAMINATION_CFG["databases"][species]+".1.bt2"):
-			raise WorkflowError("Could not find files for bowtie2 index "+CONTAMINATION_CFG["databases"][species]+" (if not index is not present in /projects/seq-work/user/pipeline/bowtie2/, specify an absolute path!")
-	elif CONTAMINATION_CFG["aligner"] == "bwa":
-		if not os.path.exists(CONTAMINATION_CFG["databases"][species]+".bwt") and os.path.exists("/projects/seq-work/user/pipeline/bwa/"+CONTAMINATION_CFG["databases"][species]+".bwt"):
-			CONTAMINATION_CFG["databases"][species] = "/projects/seq-work/user/pipeline/bwa/"+CONTAMINATION_CFG["databases"][species]
-		if not os.path.exists(CONTAMINATION_CFG["databases"][species]+".bwt"):
-			raise WorkflowError("Could not find files for bwa index "+CONTAMINATION_CFG["databases"][species]+" (if not index is not present in /projects/seq-work/user/pipeline/bwa/, specify an absolute path!")
-	elif CONTAMINATION_CFG["aligner"] == "bowtie":
-		if not os.path.exists(CONTAMINATION_CFG["databases"][species]+".1.ebwt") and os.path.exists("/projects/seq-work/user/pipeline/bowtie1/"+CONTAMINATION_CFG["databases"][species]+".1.ebwt"):
-			CONTAMINATION_CFG["databases"][species] = "/projects/seq-work/user/pipeline/bowtie1/"+CONTAMINATION_CFG["databases"][species]
-		if not os.path.exists(CONTAMINATION_CFG["databases"][species]+".1.ebwt"):
-			raise WorkflowError("Could not find files for bowtie index "+CONTAMINATION_CFG["databases"][species]+" (if not index is not present in /projects/seq-work/user/pipeline/bowtie1/, specify an absolute path!")
+	if not os.path.exists(CONTAMINATION_CFG["databases"][species]+".bwt") and os.path.exists("/projects/seq-work/user/pipeline/fastq_screen/"+CONTAMINATION_CFG["databases"][species]+".bwt"):
+		CONTAMINATION_CFG["databases"][species] = "/projects/seq-work/user/pipeline/fastq_screen/"+CONTAMINATION_CFG["databases"][species]
+	if not os.path.exists(CONTAMINATION_CFG["databases"][species]+".bwt"):
+		raise WorkflowError("Could not find files for bwa index "+CONTAMINATION_CFG["databases"][species]+" (if not index is not present in /projects/seq-work/user/pipeline/fastq_screen/, specify an absolute path!")
 
 if "aligner_params" in CONTAMINATION_CFG:
 	CONTAMINATION_CFG["aligner_params"] = "--"+CONTAMINATION_CFG["aligner"]+" '"+CONTAMINATION_CFG["aligner_params"]+"'"

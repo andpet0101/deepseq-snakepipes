@@ -40,9 +40,9 @@ bfx_id = arguments[1]
 data_directory = arguments[2]
 pdf_directory = arguments[3]
 
-bfx_id = "bfx735"
-data_directory = "fastqc/report/data"
-pdf_directory = "fastqc/report/pdf"
+#bfx_id = "bfx735"
+#data_directory = "fastqc/report/data"
+#pdf_directory = "fastqc/report/pdf"
 
 #############
 # Functions #
@@ -469,7 +469,7 @@ if("sequence_length_distribution" %in% names(fastqc_result)){
 		geom_line() +
 		geom_point() +
 		theme_bw(12) +
-		scale_x_continuous("Length",limits=x_axis_breaks,breaks=x_axis_breaks,labels=x_axis_labels) +
+		scale_x_discrete("Length",limits=x_axis_breaks,breaks=x_axis_breaks,labels=x_axis_labels) +
 		scale_y_continuous("Fraction of reads",limits=c(0,1)) +
 		scale_colour_manual("Library",values=color_brewer_qual_palette) +
 		facet_wrap(~Read,ncol=plot_size$num_columns,scales="free_x") +
