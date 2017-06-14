@@ -66,11 +66,13 @@ rule make_mapping_plots:
 		MAPPING_PLOTS_FILES
 	log:
 		ALIGNER_CFG["program"] + "/log/figures_mappingstatistics.log"
+	params:
+		lib_display="-d "+LIBCOMPLEXITY_CFG["lib_display"] if "lib_display" in LIBCOMPLEXITY_CFG else ""
 	shell:
 		"\n\t\t("+module_load("python","R")+
 		"""
 		touch {MAPPING_PLOTS_FILES}
-		figures_mappingstatistics.py -i {ALIGNER_CFG[program]}/report/data -r {ALIGNER_CFG[program]}/report -s """ + ("Complete Gene" if CALC_GENE_COMPLEXITY==1 else "Complete")  + """ -b {PROJECT} -d {LIBCOMPLEXITY_CFG[lib_display]}) >& {log}
+		figures_mappingstatistics.py -i {ALIGNER_CFG[program]}/report/data -r {ALIGNER_CFG[program]}/report -s """ + ("Complete Gene" if CALC_GENE_COMPLEXITY==1 else "Complete")  + """ -b {PROJECT} {params.lib_display}) >& {log}
 		"""
 
 if CALC_GENE_COMPLEXITY==1:
