@@ -154,7 +154,7 @@ rule map_filtered_miRNA_fastq_on_genome:
 		fq="miRNA/{basename}_R1.filtered.fastq.gz"
 	output:
 		bam="miRNA/{basename}.filtered.bam",
-		bai="miRNA/{basename}.filtered.bam.bai",
+		bai="miRNA/{basename}.filtered.bai",
 		summary="miRNA/report/data/"+PROJECT+"_{basename}.filtered_mapping.txt"
 	log:
 		"miRNA/log/{basename}.map_filtered_miRNA_fastq_on_genome.log"

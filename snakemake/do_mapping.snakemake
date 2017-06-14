@@ -7,6 +7,10 @@ except NameError:
 # Config/Parameter #
 ####################
 
+# info about reference needed
+if not REFERENCE_CFG:
+	raise WorkflowError("Please provide a reference configuration!")
+
 # info about aligner and libcomplexity is needed
 if not ALIGNER_CFG:
 	raise WorkflowError("Please provide an aligner configuration!")
@@ -23,7 +27,7 @@ CALC_GENE_COMPLEXITY = LIBCOMPLEXITY_CFG["calc_gene_complexity"]
 
 # produce bam and bai files
 BAM_FILES = [ALIGNER_CFG["program"] + "/" + s + ".bam" for s in LIBRARIES]
-BAI_FILES = [ALIGNER_CFG["program"] + "/" + s + ".bam.bai" for s in LIBRARIES]
+BAI_FILES = [ALIGNER_CFG["program"] + "/" + s + ".bai" for s in LIBRARIES]
 
 # produce mapping stats files
 MAPPING_STATS_FILES = []
@@ -104,13 +108,13 @@ rule index_bam:
 	input:
 		ALIGNER_CFG["program"] + "/{basename}.bam"
 	output:
-		ALIGNER_CFG["program"] + "/{basename}.bam.bai"
+		ALIGNER_CFG["program"] + "/{basename}.bai"
 	log:
-		ALIGNER_CFG["program"] + "/log/{basename}.bam.bai.log"
+		ALIGNER_CFG["program"] + "/log/{basename}.bai.log"
 	shell:
 		"\n\t\t("+module_load("samtools")+
 		"""
-		samtools index {input}) >& {log}
+		samtools index {input} {output}) >& {log}
 		"""	
 
 # BWA #####

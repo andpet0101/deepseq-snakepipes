@@ -31,7 +31,7 @@ if not os.path.exists(RNASEQC_CFG["rRNA_list"]):
 
 # bam and bai files are needed
 BAM_FILES = [ALIGNER_CFG["program"] + "/" + s + ".bam" for s in LIBRARIES]
-BAI_FILES = [ALIGNER_CFG["program"] + "/" + s + ".bam.bai" for s in LIBRARIES]
+BAI_FILES = [ALIGNER_CFG["program"] + "/" + s + ".bai" for s in LIBRARIES]
 
 
 ###########
