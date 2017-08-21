@@ -1,0 +1,92 @@
+try:
+	GENERAL_SETTINGS_INCLUDED
+except NameError: 
+	include: "general_settings.snakemake"
+
+####################
+# Config/Parameter #
+####################
+
+# info about reference needed
+if not REFERENCE_CFG:
+	raise WorkflowError("Please provide a reference configuration!")
+
+# info about aligner needed
+if not ALIGNER_CFG:
+	raise WorkflowError("Please provide an aligner configuration!")
+
+# bed file for target regions
+#if "target_regions_bed" in VARIANT_CALLING_CFG:
+#	if not os.path.exists(VARIANT_CALLING_CFG["target_regions_bed"]):
+#		raise WorkflowError("Could not find file "+VARIANT_CALLING_CFG["target_regions_bed"]+" for variant_calling.target_regions_bed!")
+
+###########
+# Targets #
+###########
+
+
+#########
+# Rules #
+#########
+
+shell.prefix("set -euf -o pipefail;")
+
+
+
+rule calc_bp_coverage_for_intervals:
+	input:
+		bam=ALIGNER_CFG["aligner"]+"/{basename}.bam",
+		bam=ALIGNER_CFG["aligner"]+"/{basename}.bai",
+		interval_regions=
+		non_interval_regions=
+	output:
+		target_region_coverage=ALIGNER_CFG["aligner"]+"/report/data/{basename}_target_region_bp_coverage.bed.gz",
+		nontarget_region_coverage=ALIGNER_CFG["aligner"]+"/report/data/{basename}_nontarget_region_bp_coverage.bed.gz",
+	log:
+		ALIGNER_CFG["aligner"]+"/log/{basename}.calc_target_region_bp_coverage.log"
+	params:
+		genome=REFERENCE_CFG["path"]+".genome"
+	shell:
+		"\n\t\t("+module_load("bedtools","samtools")+
+		"""
+		samtools view -u -F 0x100 {input.bam} | samtools view -u -q 1 -f 2 - | bedtools coverage -a {input.target_regions} -b stdin -hist -sorted -g {params.genome} | gzip -c > {output.target_region_coverage}
+		samtools view -u -F 0x100 {input.bam} | samtools view -u -q 1 -f 2 - | bedtools coverage -a {input.nontarget_regions} -b stdin -hist -sorted -g {params.genome} | gzip -c > {output.nontarget_region_coverage}
+		"""
+
+# these are intervals used to analyse QC along the genome
+rule prepare_analysis_intervalls:
+	input:
+		target_regions="",
+		nontarget_regions=""
+	output:
+		intervals_target=,
+		intervals_nontarget=,
+	log:
+		""
+	shell:
+		"""
+		"""		
+	
+
+# give target regions as parameter or as complete genome: extend and complement
+rule prepare_target_nontarget_regions:
+	output:
+		target_regions="",
+		nontarget_regions=""
+	params:
+		genome=REFERENCE_CFG["path"]+".genome",
+	log:
+		""
+	shell:
+		"""
+		"""
+
+
+
+# 1. target region enrichment vs nontarget region enrichment (for WGS, target region is complete genome): total and per chromosome
+# 2. coverage of smaller intervalls on target regions 
+# 3. duplication rate (on target regions and on smaller intervalls)
+# 4. 
+#
+		
+

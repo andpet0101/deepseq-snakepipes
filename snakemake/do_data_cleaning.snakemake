@@ -8,7 +8,18 @@ except NameError:
 ####################
 
 # default recipes
-CLEAN_DATA_RECIPES = {"WGS" : "-q 5 -m 20 -a truseq=AGATCGGAAGAGC","RNAseq" : "-q 5 -m 20 -a truseq=AGATCGGAAGAGC","WGS_paired" : "-q 5 -m 20 -a truseq1=AGATCGGAAGAGC -A truseq2=AGATCGGAAGAGC","RNAseq_paired" : "-q 5 -m 20 -a truseq1=AGATCGGAAGAGC -A truseq2=AGATCGGAAGAGC","miRNA" : "--trim-n -m 18 -q 10 -O 12 -n 2 --discard-untrimmed -a neb1=AGATCGGAAGAGCACACGTCT -a truseq_seqmatic_nextflex1=TGGAATTCTCGGGTGCCAAGG -a neb2=AGATCGGAAGAG -a truseq_seqmatic_nextflex2=TGGAATTCTCGG","damID" : "--trim-n -m 20 -n 2 -g ^GGTCGCGGCCGAGGATC -g CGCGGCCGAGGATC -a GATCCTCGGCCGCGACC -e 0.15","gecko" : "-a a1=GTTTTAGAGCTAGAAATAGC -O 20 -e 0.05 --trimmed-only -g g1=GTGGAAAGGACGAAACACCG -g g2=GTGGAAAGGACGAAACACCT -g g3=GTGGAAAGGACGAAACACCC -m 19 -n 2","none" : " ","C1" : "-m 20 -q 10 -n 2 -O 20 -a polyA='A{100}' -a polyG='G{100}' -a polyT='T{100}'"}
+CLEAN_DATA_RECIPES = dict()
+CLEAN_DATA_RECIPES["WGS"] = "-q 5 -m 20 -a truseq=AGATCGGAAGAGC"
+CLEAN_DATA_RECIPES["RNAseq"] = "-q 5 -m 20 -a truseq=AGATCGGAAGAGC"
+CLEAN_DATA_RECIPES["WGS_paired"] = "-q 5 -m 20 -a truseq1=AGATCGGAAGAGC -A truseq2=AGATCGGAAGAGC"
+CLEAN_DATA_RECIPES["RNAseq_paired"] = "-q 5 -m 20 -a truseq1=AGATCGGAAGAGC -A truseq2=AGATCGGAAGAGC"
+CLEAN_DATA_RECIPES["miRNA"] = "--trim-n -m 18 -q 10 -O 12 -n 2 --discard-untrimmed -a neb1=AGATCGGAAGAGCACACGTCT -a truseq_seqmatic_nextflex1=TGGAATTCTCGGGTGCCAAGG -a neb2=AGATCGGAAGAG -a truseq_seqmatic_nextflex2=TGGAATTCTCGG"
+CLEAN_DATA_RECIPES["damID"] = "--trim-n -m 20 -n 2 -g ^GGTCGCGGCCGAGGATC -g CGCGGCCGAGGATC -a GATCCTCGGCCGCGACC -e 0.15"
+CLEAN_DATA_RECIPES["gecko"] = "-a a1=GTTTTAGAGCTAGAAATAGC -O 20 -e 0.05 --trimmed-only -g g1=GTGGAAAGGACGAAACACCG -g g2=GTGGAAAGGACGAAACACCT -g g3=GTGGAAAGGACGAAACACCC -m 19 -n 2"
+CLEAN_DATA_RECIPES["none"] = " "
+CLEAN_DATA_RECIPES["C1"] = "-m 20 -q 10 -n 2 -O 20 -a polyA='A{100}' -a polyG='G{100}' -a polyT='T{100}'"
+CLEAN_DATA_RECIPES["dropseq"] = "-m 20 -q 5 -n 2 -O 20 -a polyA='A{100}' -a polyT='T{100}'"
+CLEAN_DATA_RECIPES["chromium_single_cell"] = "-g chromium=AAGCAGTGGTATCAACGCAGAGTACATGGG -q 5 -m 20 -n 2 -O 20 -a polyA='A{100}'"
 
 
 # set actual trimming recipe
@@ -17,7 +28,7 @@ if CLEAN_DATA_CFG:
 		if CLEAN_DATA_CFG["parameter"] in CLEAN_DATA_RECIPES:
 			CLEAN_DATA_CFG["parameter"] = CLEAN_DATA_RECIPES[CLEAN_DATA_CFG["parameter"]]
 	else:
-		raise WorkflowError("Please specify the clean_data.parameter to be used by cutadapt either by 'WGS','WGS_paired','RNAseq','RNAseq_paired','miRNA','damID','gecko','none' or by providing cutadapt trim/clean parameter.")
+		raise WorkflowError("Please specify the clean_data.parameter to be used by cutadapt - "+(','.join(CLEAN_DATA_RECIPES.keys()))+" - or provide cutadapt trim/clean parameter.")
 	if "umi_libs" in CLEAN_DATA_CFG and CLEAN_DATA_CFG["umi_libs"] and "umi_trim" not in CLEAN_DATA_CFG:
 		raise WorkflowError("Please specify UMI trim positions (read1_5,read1_3[;read2_5,read2_3])!")
 	elif "umi_trim" in CLEAN_DATA_CFG and "umi_libs" not in CLEAN_DATA_CFG:
@@ -107,8 +118,7 @@ rule make_clean_fastq:
 
 rule record_umi_in_fastq_single:
 	input:
-		fq="fastq/{basename}_R1.cutadapt.fastq.gz",
-		csv="fastq/report/data/{basename}.cutadapt.csv.gz"
+		fq="fastq/{basename}_R1.cutadapt.fastq.gz"
 	output:
 		fq=temp("fastq/{basename}_R1.umi.fastq.gz"),
 		summary="fastq/report/data/"+PROJECT+"_{basename}.umi.txt",
@@ -126,8 +136,7 @@ rule record_umi_in_fastq_single:
 rule record_umi_in_fastq_paired:
 	input:
 		fq1="fastq/{basename}_R1.cutadapt.fastq.gz",
-		fq2="fastq/{basename}_R2.cutadapt.fastq.gz",
-		csv="fastq/report/data/{basename}.cutadapt.csv.gz"
+		fq2="fastq/{basename}_R2.cutadapt.fastq.gz"
 	output:
 		fq1=temp("fastq/{basename}_R1.umi.fastq.gz"),
 		fq2=temp("fastq/{basename}_R2.umi.fastq.gz"),
@@ -174,9 +183,3 @@ rule run_cutadapt_paired:
 		"""
 		cutadapt {CLEAN_DATA_CFG[parameter]} -o {output.fq1} -p {output.fq2} --info-file={output.csv} {input.fq1} {input.fq2} > {output.summary}) >& {log}
 		"""
-
-
-
-
-
-

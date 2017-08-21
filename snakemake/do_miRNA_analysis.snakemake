@@ -22,7 +22,6 @@ if not ANNOTATION_CFG:
 	raise WorkflowError("Please provide an annotation configuration!")
 
 # aligner configuration for bowtie is configured by default but aligner.index and aligner.index_directory can be explicitly changed
-# moreover, three indices are needed: index (genome), index.rRNA (all rRNAs) and index.tRNA (all tRNAs)
 ALIGNER_CFG["binary"] = "bowtie"
 if "index_directory" not in ALIGNER_CFG:
 	ALIGNER_CFG["index_directory"] = "/projects/seq-work/user/pipeline/bowtie1"
@@ -30,10 +29,6 @@ if "index" not in ALIGNER_CFG:
 	ALIGNER_CFG["index"] = REFERENCE_CFG["version"]
 if not os.path.exists(ALIGNER_CFG["index_directory"]+"/"+ALIGNER_CFG["index"]+".1.ebwt"):
 	raise WorkflowError("Could not find the bowtie1 genome index files for "+ALIGNER_CFG["index"]+" (aligner.index) in "+ALIGNER_CFG["index_directory"]+" (aligner.index_directory)!")
-if not os.path.exists(ALIGNER_CFG["index_directory"]+"/"+ALIGNER_CFG["index"]+".rRNA.1.ebwt"):
-	raise WorkflowError("Could not find the bowtie1 rRNA index files for "+ALIGNER_CFG["index"]+".rRNA (aligner.index) in "+ALIGNER_CFG["index_directory"]+" (aligner.index_directory)!")
-if not os.path.exists(ALIGNER_CFG["index_directory"]+"/"+ALIGNER_CFG["index"]+".tRNA.1.ebwt"):
-	raise WorkflowError("Could not find the bowtie1 tRNA index files for "+ALIGNER_CFG["index"]+".tRNA (aligner.index) in "+ALIGNER_CFG["index_directory"]+" (aligner.index_directory)!")
 
 # mirdeep_star configuration
 MIRDEEP_STAR_CFG = config.get("mirdeep_star",dict())
@@ -166,7 +161,7 @@ rule map_filtered_miRNA_fastq_on_genome:
 		RG="{wildcards.basename}";LB="{wildcards.basename}";SM="{wildcards.basename}"
 		if [[ "{wildcards.basename}" =~ ^(L[0-9]+)_(.+) ]];then LB="${{BASH_REMATCH[1]}}";SM="${{BASH_REMATCH[2]}}";fi
 		gunzip -cd {input.fq} | {ALIGNER_CFG[binary]} -l 15 -v 2 -e 999 --nomaqround --best --strata -a -m 100 --chunkmbs 256 -p ${{NSLOTS:-{threads}}} -S --sam-RG ID:$RG --sam-RG LB:$LB --sam-RG SM:$SM {ALIGNER_CFG[index_directory]}/{ALIGNER_CFG[index]} - | \
-		samtools sort -O bam -T ${{TMPDIR:-.}}/{wildcards.basename} -o {output.bam} -@ 2 -;samtools index {output.bam}) 2>&1 | tee {output.summary} >& {log}
+		samtools sort -O bam -T ${{TMPDIR:-.}}/{wildcards.basename} -o {output.bam} -@ 2 -;samtools index {output.bam} {output.bai}) 2>&1 | tee {output.summary} >& {log}
 		"""
 
 
@@ -188,9 +183,9 @@ rule filter_otherRNA_from_miRNA_fastq:
 		"\n\t\t("+module_load("bowtie","samtools","bedtools")+
 		"""
 		gunzip -cd {input.fq} | {ALIGNER_CFG[binary]} -l 15 -n 0 -e 999 --nomaqround --best --strata -a -m 1 --chunkmbs 256 -p ${{NSLOTS:-{threads}}} -S {ALIGNER_CFG[index_directory]}/{ALIGNER_CFG[index]} - | samtools sort -O bam -T ${{TMPDIR:-.}}/{wildcards.basename} -o {output.bam} -@ 2 -
-		bedtools intersect -a {output.bam} -b {input.bed} -s -v -sorted -g {REFERENCE_CFG[path]}.genome | bedtools bamtofastq -i stdin -fq /dev/stdout | gzip -c > {output.fq}
-		bedtools intersect -a {output.bam} -b {input.bed} -s -wa -wb -bed -sorted -g {REFERENCE_CFG[path]}.genome | awk '{{OFS="\t";print $4,$3-$2,$16}}' | \
-		sort -k 1,1 | bedtools groupby -g 1,2 -c 3 -o first | awk '{{print $3,$2}}' | sort -k 1,1 -k 2,2n | uniq -c | awk 'BEGIN{{OFS="\\t";print "type","length","count"}}{{print $2,$3,$1}}' > {output.summary}
+		bedtools intersect -a {output.bam} -b {input.bed} -s -v | bedtools bamtofastq -i stdin -fq /dev/stdout | gzip -c > {output.fq}
+		bedtools intersect -a {output.bam} -b {input.bed} -s -wa -wb -bed | awk '{{OFS="\\t";print $4,$3-$2,$16}}' | \
+		sort -k 1,1 | awk '{{print $3,$2}}' | sort -k 1,1 -k 2,2n | uniq -c | awk 'BEGIN{{OFS="\\t";print "type","length","count"}}{{print $2,$3,$1}}' > {output.summary}
 		gunzip -cd {output.fq} | awk 'NR%4==2{{print length($0)}}' | sort -n | uniq -c | awk 'BEGIN{{OFS="\\t";print "type","length","count"}}{{print "clean",$2,$1}}' > {output.clean}) >& {log}
 		"""	
 
@@ -204,12 +199,13 @@ rule create_otherRNA_genomic_filter_bed:
 		"""
 		cat {ANNOTATION_CFG[gtf]} | egrep --color=never 'gene_biotype "(Mt_rRNA|Mt_tRNA|rRNA|scaRNA|snoRNA|snRNA|sRNA|protein_coding)"' | gffread -o- -F - | \
 		sed -r 's|(.*\\t).*gene_biotype=([^;]+).*|\\1\\2|p' | awk '$3=="transcript" || $3=="mRNA"{{OFS="\\t";print $1,$4,$5,$9,$6,$7}}' | bedtools merge -c 4,5,6 -o first,first,first | \
-		bedtools sort -i stdin -faidx {REFERENCE_CFG[path]}.genome > {output}) >& {log}
+		bedtools sort -i stdin > {output}) >& {log}
 		"""
 
 rule filter_tRNA_from_miRNA_fastq:
 	input:
-		"miRNA/{basename}_R1.wo_rRNA.fastq.gz"
+		fq="miRNA/{basename}_R1.wo_rRNA.fastq.gz",
+		index="miRNA/tRNA.1.ebwt"
 	output:
 		fq=temp("miRNA/{basename}_R1.wo_rRNA_tRNA.fastq.gz"),
 		summary="miRNA/report/data/"+PROJECT+"_{basename}.tRNA.txt"
@@ -220,13 +216,14 @@ rule filter_tRNA_from_miRNA_fastq:
 	shell:
 		"\n\t\t("+module_load("bowtie")+
 		"""		
-		gunzip -cd {input} | {ALIGNER_CFG[binary]} -l 15 -n 0 --nomaqround -p ${{NSLOTS:-{threads}}} -k 1 -S --sam-nohead --un=miRNA/{wildcards.basename}_R1.wo_rRNA_tRNA.fastq {ALIGNER_CFG[index_directory]}/{ALIGNER_CFG[index]}.tRNA - /dev/stdout | awk '$3!="*"{{print length($10)}}' | sort | uniq -c | awk 'BEGIN{{OFS="\\t";print "type","length","count"}}{{print "tRNA",$2,$1}}' > {output.summary}) >& {log}
+		gunzip -cd {input.fq} | {ALIGNER_CFG[binary]} -l 15 -n 0 --nomaqround -p ${{NSLOTS:-{threads}}} -k 1 -S --sam-nohead --un=miRNA/{wildcards.basename}_R1.wo_rRNA_tRNA.fastq miRNA/tRNA - /dev/stdout | awk '$3!="*"{{print length($10)}}' | sort | uniq -c | awk 'BEGIN{{OFS="\\t";print "type","length","count"}}{{print "tRNA",$2,$1}}' > {output.summary}) >& {log}
 		gzip miRNA/{wildcards.basename}_R1.wo_rRNA_tRNA.fastq
 		"""
 
 rule filter_rRNA_from_miRNA_fastq:
 	input:
-		"fastq/{basename}_R1.clean.fastq.gz"
+		fq="fastq/{basename}_R1.clean.fastq.gz",
+		index="miRNA/rRNA.1.ebwt"
 	output:
 		fq=temp("miRNA/{basename}_R1.wo_rRNA.fastq.gz"),
 		summary="miRNA/report/data/"+PROJECT+"_{basename}.rRNA.txt"
@@ -237,7 +234,7 @@ rule filter_rRNA_from_miRNA_fastq:
 	shell:
 		"\n\t\t("+module_load("bowtie")+
 		"""	
-		gunzip -cd {input} | {ALIGNER_CFG[binary]} -l 15 -n 0 --nomaqround -p ${{NSLOTS:-{threads}}} -k 1 -S --sam-nohead --un=miRNA/{wildcards.basename}_R1.wo_rRNA.fastq {ALIGNER_CFG[index_directory]}/{ALIGNER_CFG[index]}.rRNA - /dev/stdout | awk '$3!="*"{{print length($10)}}' | sort | uniq -c | awk 'BEGIN{{OFS="\\t";print "type","length","count"}}{{print "rRNA",$2,$1}}' > {output.summary}) >& {log}
+		gunzip -cd {input.fq} | {ALIGNER_CFG[binary]} -l 15 -n 0 --nomaqround -p ${{NSLOTS:-{threads}}} -k 1 -S --sam-nohead --un=miRNA/{wildcards.basename}_R1.wo_rRNA.fastq miRNA/rRNA - /dev/stdout | awk '$3!="*"{{print length($10)}}' | sort | uniq -c | awk 'BEGIN{{OFS="\\t";print "type","length","count"}}{{print "rRNA",$2,$1}}' > {output.summary}) >& {log}
 		gzip miRNA/{wildcards.basename}_R1.wo_rRNA.fastq
 		"""
 
@@ -259,4 +256,37 @@ rule map_unfiltered_miRNA_fastq_on_genome:
 		gunzip -cd {input.fq} | {ALIGNER_CFG[binary]} -l 15 -v 2 -e 999 --nomaqround --best --strata -a -m 1 --chunkmbs 256 -p ${{NSLOTS:-{threads}}} -S --sam-RG ID:$RG --sam-RG LB:$LB --sam-RG SM:$SM {ALIGNER_CFG[index_directory]}/{ALIGNER_CFG[index]} - | \
 		samtools sort -O bam -T ${{TMPDIR:-.}}/{wildcards.basename} -o {output.bam} -@ 2 -) 2>&1 | tee {output.summary} >& {log}
 		"""
+
+rule prepare_rRNA_bowtie1_index:
+	output:
+		index="miRNA/rRNA.1.ebwt",
+		fa="miRNA/rRNA.fa"
+	log:
+		"miRNA/log/build_rRNA_bowtie_index.log"
+	params:
+		reference=REFERENCE_CFG["path"]+".fa",
+		annotation=ANNOTATION_CFG["gtf"]
+	shell:
+		"\n\t\t("+module_load("bowtie","bedtools")+
+		"""
+		cat {params.annotation} | egrep 'gene_biotype "rRNA"' | awk '$3=="gene"' | perl -pe 's/gene_id \"(\S+)\".+/$1/' | awk 'BEGIN{{FS=OFS="\\t"}}{{print $1,$4-1,$5,$9,".",$7}}' | bedtools getfasta -fi {params.reference} -bed stdin -fullHeader -name -s > miRNA/rRNA.fa
+		bowtie-build miRNA/rRNA.fa miRNA/rRNA) >& {log}
+		"""
+
+rule prepare_tRNA_bowtie1_index:
+	output:
+		index="miRNA/tRNA.1.ebwt",
+		fa="miRNA/tRNA.fa"
+	log:
+		"miRNA/log/build_tRNA_bowtie_index.log"
+	params:
+		reference=REFERENCE_CFG["path"]+".fa",
+		annotation=ANNOTATION_CFG["gtf"]
+	shell:
+		"\n\t\t("+module_load("bowtie","bedtools")+
+		"""
+		cat {params.annotation} | egrep 'gene_biotype "Mt_tRNA"' | awk '$3=="gene"' | perl -pe 's/gene_id \"(\S+)\".+/$1/' | awk 'BEGIN{{FS=OFS="\\t"}}{{print $1,$4-1,$5,$9,".",$7}}' | bedtools getfasta -fi {params.reference} -bed stdin -fullHeader -name -s > miRNA/tRNA.fa
+		bowtie-build miRNA/tRNA.fa miRNA/tRNA) >& {log}
+		"""
+		
 

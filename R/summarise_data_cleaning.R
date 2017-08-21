@@ -7,12 +7,11 @@ home_last_order = order(grepl('^/home',.libPaths()))
 
 
 library(ggplot2)
-library(plyr)
-library(dplyr)
 library(magrittr)
 library(tidyr)
 library(scales)
 library(grid)
+library(dplyr) # dplyr should always be last
 theme_set(theme_bw(14))
 
 
@@ -42,6 +41,11 @@ bfx_id = arguments[1]
 data_directory = arguments[2]
 pdf_directory = arguments[3]
 
+#bfx_id = "bfx785"
+#data_directory = "fastq/report/data"
+#pdf_directory = "fastq/report/pdf"
+
+
 #############
 # Functions #
 #############
@@ -56,7 +60,7 @@ parse_cutadapt_summary = function(cutadapt_file){
 	}	
 	
 	# file
-	cutadapt_summary = data.frame(library=gsub('\\.cutadapt\\.txt$','',basename(cutadapt_file)))		
+	cutadapt_summary = data.frame(library=gsub('\\.cutadapt\\.txt$','',basename(cutadapt_file)),stringsAsFactors=F)		
 	
 	# paired end data
 	if(length(grep("^(Total read pairs processed)",cutadapt_lines))>0){
@@ -138,7 +142,7 @@ parse_umi_summary = function(umi_file){
 	}	
 
 	# file
-	umi_summary = data.frame(library=gsub('\\.umi\\.txt$','',basename(umi_file)))	
+	umi_summary = data.frame(library=gsub('\\.umi\\.txt$','',basename(umi_file)),stringsAsFactors=F)	
 	
 	# total reads
 	line = umi_lines[grep("^(Total fragments)",umi_lines)][1]
@@ -171,9 +175,10 @@ parse_umi_summary = function(umi_file){
 
 # read in cutadapt and prepare trimming data frame
 cutadapt_files = list.files(path=data_directory,pattern=".cutadapt.txt$",full.names=TRUE)
+too_many_datasets = length(cutadapt_files) > 20
 
 # short side remark: trying to convert from plyr -> dplyr but apparently there is no ldply equivalent in dplyr
-cutadapt_summary = ldply(cutadapt_files,function(x){parse_cutadapt_summary(x)})
+cutadapt_summary = lapply(cutadapt_files,parse_cutadapt_summary) %>% bind_rows()
 library_names = fixLibraryNames(cutadapt_summary$library)
 cutadapt_summary$library = factor(library_names,levels=unique(library_names))
 trimming_summary = cutadapt_summary
@@ -184,7 +189,7 @@ umi_files = list.files(path=data_directory,pattern=".umi.txt$",full.names=TRUE)
 have_umi_data = length(umi_files)>0 & sum(file.size(umi_files))>0
 
 if(have_umi_data){
-	umi_summary = ldply(umi_files,function(x){parse_umi_summary(x)})
+	umi_summary = lapply(umi_files,function(x){parse_umi_summary(x)}) %>% bind_rows()
 	library_names = fixLibraryNames(umi_summary$library)
 	umi_summary$library = factor(library_names,levels=unique(library_names))
 	umi_summary$too_short_umi = umi_summary$too_short
@@ -211,66 +216,116 @@ trimming_summary$bp_filtered = trimming_summary$total_bp - trimming_summary$bp_p
 
 trimming_summary_m = gather(trimming_summary,"metric","value",-library)
 
-# plot read input data 
-inputdf <- subset(trimming_summary_m,metric == "total_reads")
-inputdf$Libraries <- 'Libraries'
-input_data_reads_plot <- ggplot(inputdf, aes(x=Libraries, y=value)) + geom_boxplot(notch = T, fill = 'darkgoldenrod1') + 
-  scale_y_continuous("Number of reads",label=comma) + ggtitle("Sequenced reads") + 
-  theme(axis.text.x=element_blank(), axis.ticks.x=element_blank())
+# plot read input data
+if(!too_many_datasets){
+  input_data_reads_plot = ggplot(subset(trimming_summary_m,metric %in% c("total_reads")),aes(x=library,y=value)) +
+    geom_bar(stat="identity") +
+    theme_bw() +
+    scale_x_discrete("Library") +
+    scale_y_continuous("Number of reads",label=comma) +
+    theme(axis.text.x=element_text(angle=45,vjust = 1, hjust=1)) +
+    ggtitle("Sequenced reads")
+}else{
+  input_data_reads_plot = ggplot(subset(trimming_summary_m,metric %in% c("total_reads")), aes(x=1,y=value)) + 
+    geom_boxplot(notch = F, fill = 'darkgoldenrod1') + scale_x_discrete("Libraries",label=comma) + 
+    scale_y_continuous("Number of reads",label=comma) + ggtitle("Sequenced reads") + 
+    theme(axis.text.x=element_blank(), axis.ticks.x=element_blank()) + ggtitle("Sequenced reads")
+}
 ggsave(paste(pdf_directory,paste(bfx_id,"input_reads.pdf",sep="_"),sep="/"),input_data_reads_plot)
 
 # plot bp input data
-inputdf <- subset(trimming_summary_m,metric == "total_bp")
-inputdf$Libraries <- 'Libraries'
-input_data_bp_plot = ggplot(inputdf ,aes(x=Libraries,y=value)) + geom_boxplot(notch = T, fill = 'darkgoldenrod1') + 
-  scale_y_continuous("Total sequence data in Mb",label=Mb_labels) + ggtitle("Sequenced bps") +
-  theme(axis.text.x=element_blank(), axis.ticks.x=element_blank())
+if(!too_many_datasets){
+  input_data_bp_plot = ggplot(subset(trimming_summary_m,metric %in% c("total_bp")),aes(x=library,y=value)) +
+    geom_bar(stat="identity") +
+    theme_bw() +
+    scale_x_discrete("Library") +
+    scale_y_continuous("Total sequence data in Mb",label=Mb_labels) +
+    theme(axis.text.x=element_text(angle=45,vjust = 1, hjust=1)) + ggtitle("Sequenced bps")
+}else{
+  input_data_bp_plot = ggplot(subset(trimming_summary_m,metric %in% c("total_reads")) ,aes(x=1,y=value)) + 
+    geom_boxplot(notch = F, fill = 'darkgoldenrod1') + scale_y_continuous("Total sequence data in Mb",label=Mb_labels) + 
+    ggtitle("Sequenced bps") + theme(axis.text.x=element_blank(), axis.ticks.x=element_blank())
+}
 ggsave(paste(pdf_directory,paste(bfx_id,"input_bp.pdf",sep="_"),sep="/"),input_data_bp_plot)
 
 
 # read fate plot (only before and after)
 plot_data = subset(trimming_summary_m,metric %in% c("reads_filtered","reads_passed"))
 plot_data$metric = factor(plot_data$metric,levels=c("reads_passed","reads_filtered"))
-plot_data$percent <- plot_data$value/max(plot_data$value)
-read_fate_plot = ggplot(plot_data,aes(x=metric,y=percent, fill=metric)) + geom_boxplot(notch = T) + 
-  scale_x_discrete("Read status", labels = c('Passed', 'Filtered')) + 
-  scale_y_continuous("Percentage of reads", labels = percent) + 
-  scale_fill_brewer("Read status",type="qual",palette=2) +
-  ggtitle("Reads removed after data cleaning") + theme(legend.position = 'none') 
+plot_data$percent = plot_data$value/max(plot_data$value)
+if(!too_many_datasets){
+  read_fate_plot = ggplot(plot_data,aes(x=library,y=value,fill=metric)) +
+    geom_bar(stat="identity",position="fill") +
+    theme_bw() +
+    scale_x_discrete("Library") +
+    scale_y_continuous("Percentage of reads",label=percent) +
+    scale_fill_brewer("Read status",type="qual",palette=2,labels=c("passed","filtered")) +
+    theme(axis.text.x=element_text(angle=45,vjust = 1, hjust=1)) +
+    ggtitle("Reads removed after data cleaning")
+}else{
+  read_fate_plot = ggplot(plot_data,aes(x=metric,y=percent, fill=metric)) + 
+    geom_boxplot(notch = F) + 
+    scale_x_discrete("Read status", labels = c('Passed', 'Filtered')) + 
+    scale_y_continuous("Percentage of reads", labels = percent) + 
+    scale_fill_brewer("Read status",type="qual",palette=2) +
+    ggtitle("Reads removed after data cleaning") + theme(legend.position = 'none') 
+}
 ggsave(paste(pdf_directory,paste(bfx_id,"reads_removed.pdf",sep="_"),sep="/"),read_fate_plot)
 
 
 # bp fate plot (only before and after)
 plot_data = subset(trimming_summary_m,metric %in% c("bp_filtered","bp_passed"))
 plot_data$metric = factor(plot_data$metric,levels=c("bp_passed","bp_filtered"))
-plot_data$percent <- plot_data$value/max(plot_data$value)
-bp_fate_plot = ggplot(plot_data,aes(x=metric,y=percent, fill=metric)) + geom_boxplot(notch = T) + 
-  scale_x_discrete("Read status", labels = c('Passed', 'Filtered')) +
-  scale_y_continuous("Percentage of reads", labels = percent) + 
-  scale_fill_brewer("Read status",type="qual",palette=2) +
-  ggtitle("Bps removed after data cleaning") + theme(legend.position = 'none') 
+plot_data$percent = plot_data$value/max(plot_data$value)
+if(!too_many_datasets){
+  bp_fate_plot = ggplot(plot_data,aes(x=library,y=value,fill=metric)) +
+    geom_bar(stat="identity",position="fill") +
+    theme_bw() +
+    scale_x_discrete("Library") +
+    scale_y_continuous("Percentage of bp",label=percent) +
+    scale_fill_brewer("Bp status",type="qual",palette=2,labels=c("passed","filtered")) +
+    theme(axis.text.x=element_text(angle=45,vjust = 1, hjust=1))
+}else{
+  bp_fate_plot = ggplot(plot_data,aes(x=metric,y=percent, fill=metric)) + 
+    geom_boxplot(notch = F) + 
+    scale_x_discrete("Read status", labels = c('Passed', 'Filtered')) +
+    scale_y_continuous("Percentage of reads", labels = percent) + 
+    scale_fill_brewer("Read status",type="qual",palette=2) +
+    ggtitle("Bps removed after data cleaning") + theme(legend.position = 'none') +
+    ggtitle("Reads removed by reason")
+}
 ggsave(paste(pdf_directory,paste(bfx_id,"bp_removed.pdf",sep="_"),sep="/"),bp_fate_plot)
 
 # read fate plot (complex)
 plot_data = subset(trimming_summary_m,metric %in% c("without_adapter","too_short","without_umi","reads_passed"))
 plot_data$metric = factor(plot_data$metric,levels=c("reads_passed","without_adapter","too_short","without_umi"))
 plot_data = subset(plot_data,!(metric=="without_umi" & value==0))
-plot_data$percent <- plot_data$value/max(plot_data$value)
-
-read_complex_fate_plot = ggplot(plot_data,aes(x=metric,y=percent, fill=metric, order = metric)) + geom_boxplot(notch = T) + 
-  scale_fill_brewer("Read status",type="qual",palette=2,labels=c("passed","without adapter","too short/primer dimer","without UMI")) +
-  scale_y_continuous("Percentage of reads", labels = percent) + 
-  ggtitle("Reads removed by reason") + theme(legend.position = 'none')
+plot_data$percent = plot_data$value/max(plot_data$value)
+if(!too_many_datasets){
+  read_complex_fate_plot = ggplot(plot_data,aes(x=library,y=value,fill=metric,order=metric)) +
+    geom_bar(stat="identity",position="fill") +
+    theme_bw() +
+    scale_x_discrete("Library") +
+    scale_y_continuous("Percentage of reads",label=percent) +
+    scale_fill_brewer("Read status",type="qual",palette=2,labels=c("passed","without adapter","too short/primer dimer","without UMI")) +
+    theme(axis.text.x=element_text(angle=45,vjust = 1, hjust=1))
+}else{
+  read_complex_fate_plot = ggplot(plot_data,aes(x=metric,y=percent, fill=metric, order = metric)) + 
+    geom_boxplot(notch = F) + 
+    scale_fill_brewer("Read status",type="qual",palette=2,labels=c("passed","without adapter","too short/primer dimer","without UMI")) +
+    scale_y_continuous("Percentage of reads", labels = percent) + 
+    ggtitle("Reads removed by reason") + theme(legend.position = 'none')
+}
 ggsave(paste(pdf_directory,paste(bfx_id,"reads_removed_by_cause.pdf",sep="_"),sep="/"),read_complex_fate_plot)
 
 # plot length distribution
 length_dist_files = list.files(path=data_directory,pattern=".length_distribution.txt$",full.names=TRUE)
 
-length_dist_table = ldply(length_dist_files,function(file){
-	length_table = read.table(file,header=T,sep="\t")
+length_dist_table = lapply(length_dist_files,function(file){
+	length_table = read.table(file,header=T,sep="\t",stringsAsFactors = F)
 	length_table$library = gsub('_R\\d$','',gsub('\\.length_distribution\\.txt$','',basename(file)))
 	length_table
-})
+}) %>% bind_rows()
 library_names = fixLibraryNames(length_dist_table$library)
 length_dist_table$library = factor(library_names,levels=unique(library_names))
 
@@ -279,31 +334,36 @@ length_dist_table =  length_dist_table %>%
 			group_by(library) %>% mutate(frac_reads=reads/sum(reads)) %>%
 			as.data.frame()
 
-num_columns = 4
 
-length_dist_table$length <- factor(length_dist_table$length)
-
-length_dist_plot = ggplot(length_dist_table,aes(x=length,y=frac_reads)) +
-  geom_boxplot(notch = F,fill="black") + scale_y_continuous("Fraction of reads") +
-  xlab("Read length in bp") + ggtitle("Length distribution of clean reads")
-
-required_width = 11/4*num_columns
-required_height = 6.5/3*ceiling(length(levels(length_dist_table$library))/num_columns)
-
-
-ggsave(paste(pdf_directory,paste(bfx_id,"clean_reads_length_distribution.pdf",sep="_"),sep="/"),length_dist_plot)
-# ,width=required_width,height=required_height)
-
+if(!too_many_datasets){
+  num_columns = 4
+  
+  length_dist_plot = ggplot(length_dist_table,aes(x=length,y=frac_reads)) +
+    geom_bar(stat="identity",colour="black",fill="black") +
+    theme_bw() +
+    scale_x_continuous("Read length in bp",limits=c(min(length_dist_table$length),max(length_dist_table$length))) +
+    scale_y_continuous("Fraction of reads") +
+    facet_wrap(~ library,scales="free_x",ncol=num_columns)
+  
+  required_width = 11/4*num_columns
+  required_height = 6.5/3*ceiling(length(levels(length_dist_table$library))/num_columns)
+  ggsave(paste(pdf_directory,paste(bfx_id,"clean_reads_length_distribution.pdf",sep="_"),sep="/"),length_dist_plot,width=required_width,height=required_height)
+}else{
+  length_dist_plot = ggplot(length_dist_table,aes(x=length,y=frac_reads,group=length)) +
+    geom_boxplot(notch = F,fill="black") + scale_y_continuous("Fraction of reads") +
+    xlab("Read length in bp") + ggtitle("Length distribution of clean reads")
+  ggsave(paste(pdf_directory,paste(bfx_id,"clean_reads_length_distribution.pdf",sep="_"),sep="/"),length_dist_plot)
+}
 
 # plot umi distribution
 if(have_umi_data){
 	umi_distribution_files = list.files(path=data_directory,pattern=".umi.csv.gz$",full.names=TRUE)
 	umi_distribution_files = umi_distribution_files[file.size(umi_distribution_files)>0]
-	umi_distribution_table = ldply(umi_distribution_files,function(file){
-		distribution_table = read.table(gzfile(file),header=T,sep="\t")
+	umi_distribution_table = lapply(umi_distribution_files,function(file){
+		distribution_table = read.table(gzfile(file),header=T,sep="\t",stringsAsFactors = F)
 		distribution_table$library = gsub('\\.umi\\.csv\\.gz$','',basename(file))
 		distribution_table
-	})
+	}) %>% bind_rows()
 	library_names = fixLibraryNames(umi_distribution_table$library)
 	umi_distribution_table$library = factor(library_names,levels=unique(library_names))
 

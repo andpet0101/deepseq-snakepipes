@@ -38,7 +38,7 @@ for s in LIBRARIES:
 # produce mapping stats plots
 MAPPING_PLOTS_FILES = []
 for s in ["subsample_number_1","complete_number_1","subsample_percent_1","complete_percent_1"]:
-	file_base = PROJECT + "_alignmentcomplexity_" + s + "." + ("Complete_Gene" if LIBCOMPLEXITY_CFG["calc_gene_complexity"] else "Complete") + "." + ALIGNER_CFG["program"]
+	file_base = PROJECT + ".alignmentcomplexity_" + s + "." + ("Complete_Gene" if LIBCOMPLEXITY_CFG["calc_gene_complexity"] else "Complete") + "." + ALIGNER_CFG["program"]
 	MAPPING_PLOTS_FILES.append(ALIGNER_CFG["program"] + "/report/pdf/" + file_base + ".pdf")
 	MAPPING_PLOTS_FILES.append(ALIGNER_CFG["program"] + "/report/picture/" + file_base + ".png")
 
@@ -83,7 +83,7 @@ if CALC_GENE_COMPLEXITY==1:
 			stats=ALIGNER_CFG["program"] + "/report/data/" + PROJECT + "_{basename}_alignment_stats.csv",
 			complexity=ALIGNER_CFG["program"] + "/report/data/" + PROJECT + "_{basename}_alignment_complexity.csv"
 		log:
-			ALIGNER_CFG["program"] + "/log/" + PROJECT + "_{basename}.calculate_mapping_stats.log"
+			ALIGNER_CFG["program"] + "/log/" + PROJECT + ".{basename}.calculate_mapping_stats.log"
 		shell:
 			"\n\t\t("+module_load("python","bedtools","samtools")+
 			"""
@@ -95,10 +95,10 @@ else:
 		input:
 			bam=ALIGNER_CFG["program"] + "/{basename}.bam"
 		output:
-			stats=ALIGNER_CFG["program"] + "/report/data/" + PROJECT + "_{basename}_alignment_stats.csv",
-			complexity=ALIGNER_CFG["program"] + "/report/data/" + PROJECT + "_{basename}_alignment_complexity.csv"
+			stats=ALIGNER_CFG["program"] + "/report/data/" + PROJECT + ".{basename}_alignment_stats.csv",
+			complexity=ALIGNER_CFG["program"] + "/report/data/" + PROJECT + ".{basename}_alignment_complexity.csv"
 		log:
-			ALIGNER_CFG["program"] + "/log/" + PROJECT + "_{basename}.calculate_mapping_stats.log"
+			ALIGNER_CFG["program"] + "/log/" + PROJECT + ".{basename}.calculate_mapping_stats.log"
 		shell:
 			"\n\t\t("+module_load("python","bedtools","samtools")+
 			"""

@@ -39,14 +39,7 @@ BAI_FILES = [ALIGNER_CFG["program"] + "/" + s + ".bai" for s in LIBRARIES]
 ###########
 
 # files produced
-RNASEQC_FILES = ["gapLengthHist_low.png","index.html","meanCoverage_medium.png","meanCoverageNorm_low.txt","refGene.txt.idx","gapLengthHist_low.txt",
-	"meanCoverage_high.png","meanCoverage_medium.txt","meanCoverageNorm_medium.png","report.html","countMetrics.html","gapLengthHist_medium.png","meanCoverage_high.txt","meanCoverageNorm_high.png",
-	"meanCoverageNorm_medium.txt","gapLengthHist_high.png","gapLengthHist_medium.txt","meanCoverage_low.png","meanCoverageNorm_high.txt","metrics.tsv","gapLengthHist_high.txt","genes.rpkm.gct",
-	"meanCoverage_low.txt","meanCoverageNorm_low.png","refGene.txt"]
-
-# no correlation plots will be produced if there is only one library
-if len(LIBRARIES) > 1:
-	RNASEQC_FILES.extend(["corrMatrixPearson.txt","corrMatrixSpearman.txt"])
+RNASEQC_FILES = ["index.html","report.html","countMetrics.html"]
 
 RNASEQC_FILES = expand("rnaseqc/{f}",f=RNASEQC_FILES)
 RNASEQC_TARGETS = RNASEQC_FILES + ["report/data/"+PROJECT+"_rnaseqc_alignment_rnaseqc_1.csv","report/data/"+PROJECT+"_rnaseqc_libprofile_rnaseqc_1.csv","report/"+PROJECT+"_rnaseqc_alignment_rnaseqc_1.tex","report/"+PROJECT+"_rnaseqc_libprofile_rnaseqc_1.tex"]

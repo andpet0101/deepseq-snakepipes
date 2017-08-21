@@ -11,7 +11,7 @@ except NameError:
 CONTAMINATION_CFG = config.get("contamination_screen",dict())
 
 if "databases" not in CONTAMINATION_CFG:
-	CONTAMINATION_CFG["databases"] = {"Human" : "hg38","Mouse" : "mm10","Drosophila" : "dm6","Zebrafish" : "GRCz10","E.coli" : "U00096","ERCC" : "ERCC92","UniVec" : "UniVec_Core", 'InHouse' : 'inhouse'}
+	CONTAMINATION_CFG["databases"] = {"Human" : "hg38","Mouse" : "mm10","Drosophila" : "dm6","Zebrafish" : "GRCz10","E.coli" : "U00096","ERCC" : "ERCC92","UniVec" : "UniVec_Core", 'InHouse' : 'inhouse','mycoplasms' : 'mycoplasms'}
 
 if len(CONTAMINATION_CFG["databases"].keys()) == 0:
 	raise WorkflowError("Please specify a putative contamination species!")

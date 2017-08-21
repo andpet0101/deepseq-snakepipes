@@ -41,8 +41,8 @@ data_directory = arguments[2]
 pdf_directory = arguments[3]
 
 #bfx_id = "nobfx"
-#data_directory = "fastq_screen/report/data/"
-#pdf_directory = "fastq_screen/report/pdf/"
+#data_directory = "."
+#pdf_directory = "."
 
 #############
 # Functions #
@@ -184,8 +184,12 @@ database_specific_hits_plot = ggplot() +
 
 ggsave(paste(pdf_directory,paste(bfx_id,"contamination_database_specific_hits.pdf",sep="_"),sep="/"),plot=database_specific_hits_plot,width=plot_size$width,height=plot_size$height)
 
-one_genome_hits_table = data.frame(fastq_screen_result$databases[,c("Library","Read","Library_read","Database","Reads_processed")],
-		hits=fastq_screen_result$databases$One_hit_one_genome+fastq_screen$databases$Multiple_hits_one_genome)
+one_genome_hits_table = data.frame(Library=fastq_screen_result$databases$Library,
+				Read=fastq_screen_result$databases$Read,
+				Library_read=fastq_screen_result$databases$Library_read,
+				Database=fastq_screen_result$databases$Database,
+				Reads_processed=fastq_screen_result$databases$Reads_processed,
+				hits=fastq_screen_result$databases$perc_One_hit_one_genome+fastq_screen_result$databases$perc_Multiple_hits_one_genome)
 write.table(spread(one_genome_hits_table,Database,hits,fill=0),paste(data_directory,paste(bfx_id,"contamination_database_specific_hits.csv",sep="_"),sep="/"),col.names=T,row.names=F,sep="\t",quote=F)
 
 # plot No_hit stats

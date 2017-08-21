@@ -18,7 +18,7 @@ FEATURECOUNTS_TABLE = "genecount/" + PROJECT + "." + REFERENCE_CFG["version"] + 
 FEATURECOUNTS_SUMMARY ="genecount/" + PROJECT + "." + REFERENCE_CFG["version"] + ".e" + ANNOTATION_CFG["version"] + ".txt.summary"
 FEATURECOUNTS_OUT = "genecount/" + PROJECT + "." + REFERENCE_CFG["version"] + ".e" + ANNOTATION_CFG["version"] + ".out"
 FEATURECOUNTS_STATS = ["report/data/" + PROJECT + "_featureCounts_stats_featurecounts_1.csv","report/" + PROJECT + "_featureCounts_stats_featurecounts_1.tex"]
-FEATURECOUNTS_COMPLEXITY = ["genecount/report/data/" + PROJECT + "_featureCounts_complexity.csv","genecount/report/pdf/" + PROJECT + "_featureCounts_isoformcomplexity_complete_1.Genes.pdf","genecount/report/pdf/" + PROJECT + "_featureCounts_isoformcomplexity_added_1.Genes.pdf","genecount/report/png/" + PROJECT + "_featureCounts_isoformcomplexity_complete_1.Genes.png","genecount/report/png/" + PROJECT + "_featureCounts_isoformcomplexity_added_1.Genes.png"]
+FEATURECOUNTS_COMPLEXITY = ["genecount/report/data/" + PROJECT + "_featureCounts_complexity.csv","genecount/report/pdf/" + PROJECT + ".featureCounts_isoformcomplexity_complete_1.Genes.pdf","genecount/report/pdf/" + PROJECT + ".featureCounts_isoformcomplexity_added_1.Genes.pdf","genecount/report/png/" + PROJECT + ".featureCounts_isoformcomplexity_complete_1.Genes.png","genecount/report/png/" + PROJECT + ".featureCounts_isoformcomplexity_added_1.Genes.png"]
 GENECOUNTS_TARGETS = [FEATURECOUNTS_TABLE,FEATURECOUNTS_SUMMARY,FEATURECOUNTS_OUT,FEATURECOUNTS_STATS,FEATURECOUNTS_COMPLEXITY]
 
 
@@ -80,7 +80,7 @@ rule run_featureCounts:
 		"\n\t\t("+module_load("subread","samtools")+
 		"""
 		[ $(samtools view -f 1 -c {input.bams[0]}) -eq 0 ] && PARAM=\"\" || PARAM=\" -p -C -B \"		
-		featureCounts -a {ANNOTATION_CFG[gtf]} -s {STRAND} $PARAM -o {output.table} --primary -Q 1 -T ${{NSLOTS:-{threads}}} --tmpDir {TMP_DIR} {input.bams}) >& {log}
+		featureCounts -a {ANNOTATION_CFG[gtf]} -s {STRAND} $PARAM -o {output.table} -Q 1 -T ${{NSLOTS:-{threads}}} --tmpDir {TMP_DIR} {input.bams}) >& {log}
 		cp {log} {output.out}		
 		sed -i.original -e '2s/{ALIGNER_CFG[program]}\/L[0-9]\+_//g;  2s/\.bam//g' {output.table}
 		sed -i.original -e 's/{ALIGNER_CFG[program]}\/L[0-9]\+_//g; s/\.bam//g' {output.summary}

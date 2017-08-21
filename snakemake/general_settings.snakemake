@@ -96,7 +96,7 @@ if ALIGNER_CFG:
 		if ALIGNER_CFG["program"]=="bwa":
 			ALIGNER_CFG["parameter"] = "-M"
 		elif ALIGNER_CFG["program"]=="gsnap":
-			ALIGNER_CFG["parameter"] = "--use-sarray=1 --input-buffer-size=500000 --output-buffer-size=500000 -B 5 -N 1 -n 1"
+			ALIGNER_CFG["parameter"] = "--use-sarray=1 --input-buffer-size=500000 --output-buffer-size=500000 -B 5 -N 0 -n 1"
 		elif ALIGNER_CFG["program"]=="bowtie1":
 			ALIGNER_CFG["parameter"] = ""
 		else:
@@ -194,6 +194,10 @@ if "fastq" not in INPUT_CFG:
 if not INPUT_CFG["fastq"]:
 	raise WorkflowError("Could not find FASTQ files in the 'fastq' directory!")
 
+for f in INPUT_CFG["fastq"]:
+	if not os.path.exists("fastq/"+f):
+		raise WorkflowError("FASTQ file "+f+" seems to be broke!")
+
 INPUT_CFG["fastq_base"] = [re.sub('\.\S+$','',re.sub('\.fastq.gz','',f)) for f in INPUT_CFG["fastq"]]
 INPUT_CFG["fastq_base"] = sorted(set(INPUT_CFG["fastq_base"]),key=lambda x: INPUT_CFG["fastq_base"].index(x))
 if not INPUT_CFG["fastq_base"]:
@@ -226,4 +230,7 @@ def module_load(*modules):
 	module_str = module_str + " && module list -l || true"
 	return module_str
 
-			
+# triggers the automatic removal of the metadata
+#import shutil
+#onsuccess:
+#	shutil.rmtree(".snakemake")			

@@ -99,13 +99,14 @@ unfiltered_mapping_summary = ldply(unfiltered_mapping_logs,function(x){parse_bow
 library_names = fixLibraryNames(unfiltered_mapping_summary$library)
 unfiltered_mapping_summary$library = factor(library_names,levels=unique(library_names))
 
-unfiltered_mapping_summary_m = gather(unfiltered_mapping_summary[,c("library","reads_aligned_with_multi","reads_unaligned")],"metric","value",-library)
+unfiltered_mapping_summary_m = gather(unfiltered_mapping_summary[,c("library","reads_aligned_with_multi","reads_unaligned")],"metric","value",-library,factor_key=T)
+unfiltered_mapping_summary_m$metric = relevel(unfiltered_mapping_summary_m$metric,"reads_unaligned")
 unfiltered_mapping_summary_plot1 = ggplot(unfiltered_mapping_summary_m,aes(x=library,y=value,fill=metric)) +
 geom_bar(stat="identity",position="stack",colour="black") +
 theme_bw() +
 scale_x_discrete("Library") +
 scale_y_continuous("Number of reads",labels=comma) +
-scale_fill_brewer("Mapping status",type="qual",palette=2,labels=c("aligned","unaligned")) +
+scale_fill_brewer("Mapping status",type="qual",palette=2,labels=c("Not mapped","Mapped"),direction = -1) +
 theme(axis.text.x=element_text(angle=45,vjust = 1, hjust=1)) +
 ggtitle("Mapping numbers of input reads")
 ggsave(paste(bfx_id,"unfiltered_reads_genomic_mapping1.pdf",sep="_"),unfiltered_mapping_summary_plot1,path=pdf_directory,width=8)
@@ -115,7 +116,7 @@ geom_bar(stat="identity",position="fill",colour="black") +
 theme_bw() +
 scale_x_discrete("Library") +
 scale_y_continuous("Percentage of reads",label=percent) +
-scale_fill_brewer("Mapping status",type="qual",palette=2,labels=c("aligned","unaligned")) +
+scale_fill_brewer("Mapping status",type="qual",palette=2,labels=c("Not mapped","Mapped"),direction=-1) +
 theme(axis.text.x=element_text(angle=45,vjust = 1, hjust=1)) +
 ggtitle("Mapping percentages of input reads")
 ggsave(paste(bfx_id,"unfiltered_reads_genomic_mapping2.pdf",sep="_"),path=pdf_directory,width=8)
@@ -178,6 +179,7 @@ read_status_len_table = read_status_len_table %>%
 read_status_summary = read_status_len_table %>%
 			group_by(library,type) %>% summarise(count=sum(count)) %>%
 			as.data.frame()
+read_status_summary$type = factor(read_status_summary$type,levels=rev(levels(read_status_summary$type)))
 
 read_status_summary_plot1 = ggplot(read_status_summary,aes(x=library,y=count,fill=type)) +
 geom_bar(stat="identity",position="stack",colour="black") +
@@ -211,6 +213,9 @@ read_status_len_table = read_status_len_table %>%
 read_status_summary = read_status_len_table %>%
 			group_by(library,plottype) %>% summarise(count=sum(count)) %>%
 			as.data.frame()
+read_status_summary$plottype = factor(read_status_summary$plottype,levels=rev(levels(read_status_summary$plottype)))
+read_status_len_table$plottype = factor(read_status_len_table$plottype,levels=rev(levels(read_status_len_table$plottype)))
+
 
 read_status_summary_plot3 = ggplot(read_status_summary,aes(x=library,y=count,fill=plottype)) +
 geom_bar(stat="identity",position="stack",colour="black") +
@@ -258,6 +263,7 @@ required_width = 11/4*num_columns
 required_height = 6.5/3*ceiling(length(levels(read_status_len_table$library))/num_columns)
 ggsave(paste(bfx_id,"reads_filter_status_length_distribution.pdf",sep="_"),read_status_length_plot,width=required_width,height=required_height,path=pdf_directory)
 
+
 ##########################################
 # 4. plot filtered genomic mapping rates #
 ##########################################
@@ -266,23 +272,24 @@ filtered_mapping_summary = ldply(filtered_mapping_logs,function(x){parse_bowtie_
 library_names = fixLibraryNames(filtered_mapping_summary$library)
 filtered_mapping_summary$library = factor(library_names,levels=unique(library_names))
 
-filtered_mapping_summary_m = gather(filtered_mapping_summary[,c("library","reads_aligned_with_multi","reads_unaligned")],"metric","value",-library)
+filtered_mapping_summary_m = gather(filtered_mapping_summary[,c("library","reads_aligned_with_multi","reads_unaligned")],"metric","value",-library,factor_key=T)
+filtered_mapping_summary_m$metric = relevel(filtered_mapping_summary_m$metric,"reads_unaligned")
 filtered_mapping_summary_plot1 = ggplot(filtered_mapping_summary_m,aes(x=library,y=value,fill=metric)) +
 geom_bar(stat="identity",position="stack",colour="black") +
 theme_bw() +
 scale_x_discrete("Library") +
-scale_y_continuous("Numbers of reads",label=percent) +
-scale_fill_brewer("Mapping status",type="qual",palette=2,labels=c("aligned","unaligned")) +
-theme(axis.text.x=element_text(angle=45,vjust = 1, hjust=1))
-ggsave(paste(bfx_id,"filtered_reads_genomic_mapping1.pdf",sep="_"),filtered_mapping_summary_plot1,path=pdf_directory,width=8)
+scale_y_continuous("Numbers of reads",label=comma) +
+scale_fill_brewer("Mapping status",type="qual",palette=2,labels=c("Not mapped","Mapped"),direction = -1) +
+theme(axis.text.x=element_text(angle=45,vjust = 1, hjust=1)) +
 ggtitle("Mapping numbers")
+ggsave(paste(bfx_id,"filtered_reads_genomic_mapping1.pdf",sep="_"),filtered_mapping_summary_plot1,path=pdf_directory,width=8)
 
 filtered_mapping_summary_plot2 = ggplot(filtered_mapping_summary_m,aes(x=library,y=value,fill=metric)) +
 geom_bar(stat="identity",position="fill",colour="black") +
 theme_bw() +
 scale_x_discrete("Library") +
 scale_y_continuous("Percentage of reads",label=percent) +
-scale_fill_brewer("Mapping status",type="qual",palette=2,labels=c("aligned","unaligned")) +
+scale_fill_brewer("Mapping status",type="qual",palette=2,labels=c("Not mapped","Mapped"),direction=-1) +
 theme(axis.text.x=element_text(angle=45,vjust = 1, hjust=1)) +
 ggtitle("Mapping percentages of miRNA reads")
 ggsave(paste(bfx_id,"filtered_reads_genomic_mapping2.pdf",sep="_"),filtered_mapping_summary_plot2,path=pdf_directory,width=8)
@@ -332,8 +339,9 @@ mirdeep_star_summary = mirdeep_star_table %>%
 			as.data.frame()
 			
 colnames(mirdeep_star_summary) = c("library","type","All","0-10","11-100","101-1000","1001-10000",">10000")
-mirdeep_star_summary_m = gather(mirdeep_star_summary,"metric","value",-c(library,type))
+mirdeep_star_summary_m = gather(mirdeep_star_summary,"metric","value",-c(library,type),factor_key = T)
 mirdeep_star_summary_m$metric = factor(mirdeep_star_summary_m$metric,levels=c("All","0-10","11-100","101-1000","1001-10000",">10000"))
+mirdeep_star_summary_m$type = relevel(mirdeep_star_summary_m$type,"novel")
 
 number_of_profiled_miRNA_plot = ggplot(subset(mirdeep_star_summary_m,metric=="All"),aes(x=library,y=value,fill=library,alpha=type)) +
 geom_bar(stat="identity",colour="black") +
@@ -341,7 +349,7 @@ scale_x_discrete("Library") +
 scale_y_continuous("Number of identified miRNAs") +
 theme_bw() +
 scale_fill_manual("Library",values=color_brewer_qual_palette) +
-scale_alpha_manual("Type of miRNA",values=c(1,0.2),labels=c("known","putative novel")) +
+scale_alpha_manual("Type of miRNA",values=c(0.2,1),labels=c("putative novel","known")) +
 #scale_linetype_manual("Type of miRNA",values=c("solid","dashed"),labels=c("known","putative novel"),guide=guide_legend(override.aes = list(fill="white"))) +
 theme(axis.text.x=element_text(angle=45,vjust = 1, hjust=1),legend.position="bottom") +
 ggtitle("Identified MiRNAs")
@@ -354,7 +362,7 @@ scale_y_continuous("Number of identified miRNAs") +
 theme_bw() +
 facet_wrap(~ metric,scales="free_y",ncol=3) +
 scale_fill_manual("Library",values=color_brewer_qual_palette) +
-scale_alpha_manual("Type of miRNA",values=c(1,0.2),labels=c("known","putative novel")) +
+scale_alpha_manual("Type of miRNA",values=c(0.2,1),labels=c("putative novel","known")) +
 theme(axis.text.x=element_blank(),axis.ticks.x=element_blank(),legend.position="bottom") +
 ggtitle("MiRNAs by expression level")
 ggsave(paste(bfx_id,"number_of_profiled_miRNAs_with_counts.pdf",sep="_"),miRNA_read_counts_plot,width=9,height=8,path=pdf_directory)

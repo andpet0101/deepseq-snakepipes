@@ -208,11 +208,17 @@ if($host=~/^login-0-0/){
 	# pass custom job script
 	if($jobscript){
 		$cmd .= " --jobscript $jobscript";
-	}	
+	}
+	
 }
 
 # number of jobs
 $cmd .= " --jobs $jobs";
+
+# if we run jobs on a submit node then use at most 1 core in parallel; usually these jobs are either: 
+#   a) light-weight and do not take much time (then it does not matter) or 
+#   b) control SGE pipelines themself (then we do not want to run multiple in parallel
+$cmd .= " --local-cores 1 ";
 
 # add additional settings for snakemake
 $cmd .= " $snakemake_params";

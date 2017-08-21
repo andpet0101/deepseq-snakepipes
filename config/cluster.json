@@ -23,14 +23,14 @@
 	"run_gsnap_single" :
 	{
 		"runtime" : "48:00:00",
-		"memory" : "40G",
+		"memory" : "60G",
 		"cpu" : "8-20",
 		"other_resources" : "sse42"
 	},
 	"run_gsnap_paired" :
 	{
 		"runtime" : "48:00:00",
-		"memory" : "40G",
+		"memory" : "60G",
 		"cpu" : "8-20",
 		"other_resources" : "sse42"
 	},
