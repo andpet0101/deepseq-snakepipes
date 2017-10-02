@@ -56,7 +56,7 @@ rule run_fqintodatabase:
 		"""
 		export PYTHONPATH=/group/sequencing/Bfx/scripts/mathias/dsp/dsp/src
 		module load apps/python/2.7.8
-		python /group/sequencing/Bfx/scripts/common/fastq_into_database.py -d {fq_storage}{longid} -r -m -s {bcl2fastqversion}
+		python /group/sequencing/Bfx/scripts/common/fastq_into_database.py -d {fq_storage}{longid} -s {bcl2fastqversion}
 		touch {output.done}
 		"""
 
