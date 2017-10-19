@@ -128,7 +128,7 @@ rule record_umi_in_fastq_single:
 	shell:
 		"\n\t\t("+module_load("perl")+
 		"""
-		(record_umi_from_fastq.pl --fqin1 {input.fq} --fqout1 {output.fq} --umi_distribution {output.dist} --umi_spec {CLEAN_DATA_CFG[umi_trim]} --umi_libs {CLEAN_DATA_CFG[umi_libs]} --min_len 18 > {output.summary}) >& {log}
+		record_umi_from_fastq.pl --fqin1 {input.fq} --fqout1 {output.fq} --umi_distribution {output.dist} --umi_spec {CLEAN_DATA_CFG[umi_trim]} --umi_libs {CLEAN_DATA_CFG[umi_libs]} --min_len 18 > {output.summary}) >& {log}
 		"""
 
 rule record_umi_in_fastq_paired:
@@ -145,7 +145,7 @@ rule record_umi_in_fastq_paired:
 	shell:
 		"\n\t\t("+module_load("perl")+
 		"""
-		(record_umi_from_fastq.pl --fqin1 {input.fq1} --fqin2 {input.fq2} --fqout1 {output.fq1} {output.fq2} --umi_distribution {output.dist} --umi_spec {CLEAN_DATA_CFG[umi_trim]} --umi_libs {CLEAN_DATA_CFG[umi_libs]} --min_len 18 > {output.summary}) >& {log}
+		record_umi_from_fastq.pl --fqin1 {input.fq1} --fqin2 {input.fq2} --fqout1 {output.fq1} {output.fq2} --umi_distribution {output.dist} --umi_spec {CLEAN_DATA_CFG[umi_trim]} --umi_libs {CLEAN_DATA_CFG[umi_libs]} --min_len 18 > {output.summary}) >& {log}
 		"""
 
 rule run_cutadapt_single:
