@@ -95,8 +95,8 @@ else:
 		input:
 			bam=ALIGNER_CFG["program"] + "/{basename}.bam"
 		output:
-			stats=ALIGNER_CFG["program"] + "/report/data/" + PROJECT + ".{basename}_alignment_stats.csv",
-			complexity=ALIGNER_CFG["program"] + "/report/data/" + PROJECT + ".{basename}_alignment_complexity.csv"
+			stats=ALIGNER_CFG["program"] + "/report/data/" + PROJECT + "_{basename}_alignment_stats.csv",
+			complexity=ALIGNER_CFG["program"] + "/report/data/" + PROJECT + "_{basename}_alignment_complexity.csv"
 		log:
 			ALIGNER_CFG["program"] + "/log/" + PROJECT + ".{basename}.calculate_mapping_stats.log"
 		shell:

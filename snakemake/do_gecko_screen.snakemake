@@ -253,7 +253,7 @@ rule count_with_mageck:
 	shell:
 		"\n\t\t("+module_load("mageck","R")+		
 		"""	
-		mageck count --output-prefix mageck/count/all --list-seq {input.csv} --fastq {input.fqs} --unmapped-to-file --sample-label """+(",".join(SAMPLES))+""" ) >& {log}
+		mageck count --trim-5 0 --output-prefix mageck/count/all --list-seq {input.csv} --fastq {input.fqs} --unmapped-to-file --sample-label """+(",".join(SAMPLES))+""" ) >& {log}
 		"""
 
 rule rescue_gecko_sgRNA_reads:
