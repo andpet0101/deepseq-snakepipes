@@ -32,12 +32,17 @@ if PROGRAM_CFG and "cellranger" in PROGRAM_CFG:
 # Targets #
 ###########
 
-CELLRANGER_FASTQ = []
+CELLRANGER_FASTQ = {}
 for l in LIBRARIES:
-	lc = re.sub("(^L\d+)_(\S+)","\\2_\\1",l)
-	CELLRANGER_FASTQ.append("cellranger/fastq/"+lc+"_L001_R1_001.fastq.gz")
-	CELLRANGER_FASTQ.append("cellranger/fastq/"+lc+"_L001_R2_001.fastq.gz")
-	CELLRANGER_FASTQ.append("cellranger/fastq/"+lc+"_L001_I1_001.fastq.gz")
+	m = re.search("(^L\d+)_(\S+)",l)
+	lb = m.group(1)
+	sm = m.group(2)
+	if sm not in CELLRANGER_FASTQ:
+		CELLRANGER_FASTQ[sm] = []
+	CELLRANGER_FASTQ[sm].append("cellranger/fastq/"+sm+"_"+lb+"_L001_R1_001.fastq.gz")
+	CELLRANGER_FASTQ[sm].append("cellranger/fastq/"+sm+"_"+lb+"_L001_R2_001.fastq.gz")
+	CELLRANGER_FASTQ[sm].append("cellranger/fastq/"+sm+"_"+lb+"_L001_I1_001.fastq.gz")
+
 
 #########
 # Rules #
@@ -54,8 +59,7 @@ rule do_all:
 # runs cellranger aggr
 rule run_cellranger_aggregate:
 	input:
-		csv="cellranger/aggregate_samples.csv",
-		cell=["cellranger/"+s+"/cellranger_count.done" for s in SAMPLES]
+		csv="cellranger/aggregate_samples.csv"
 	output:
 		"cellranger/all/cellranger_aggregate.done"
 	log:
@@ -71,6 +75,8 @@ rule run_cellranger_aggregate:
 
 # prepares a csv for aggregating multiple cellranger runs
 rule prepare_cellranger_aggregate_csv:
+	input:
+		cell=["cellranger/"+s+"/cellranger_count.done" for s in SAMPLES]
 	output:
 		"cellranger/aggregate_samples.csv"
 	run:
@@ -83,7 +89,7 @@ rule prepare_cellranger_aggregate_csv:
 # runs cellranger count
 rule run_cellranger_count:
 	input:
-		"cellranger/fastq/all_fastqs_prepared.done"
+		"cellranger/{sample}/all_fastqs_prepared.done"
 	output:
 		"cellranger/{sample}/cellranger_count.done"
 	log:
@@ -101,9 +107,12 @@ rule run_cellranger_count:
 
 # checks if all fastq files were prepared properly
 rule fastqs_prepared_for_cellranger:
-	input: CELLRANGER_FASTQ
-	output: "cellranger/fastq/all_fastqs_prepared.done"
-	shell: "touch {output}"
+	input: 
+		lambda wildcards: CELLRANGER_FASTQ[wildcards.sample]
+	output: 
+		"cellranger/{sample}/all_fastqs_prepared.done"
+	shell: 
+		"touch {output}"
 
 # prepares fastq files for cellranger
 #

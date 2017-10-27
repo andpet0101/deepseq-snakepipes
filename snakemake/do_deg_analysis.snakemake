@@ -43,7 +43,7 @@ rule prepare_deseq_config:
 	output:
 		"de-analysis/"+PROJECT+".deseq-config.csv"
 	params:
-		template="/group/sequencing/Bfx/scripts/mathias/dsp/dsp/files/deseq-config.csv"
+		template="/group/sequencing/Bfx/scripts/common/dsp/dsp/files/deseq-config.csv"
 	run:
 		
 		with open(params.template,'r') as input:
