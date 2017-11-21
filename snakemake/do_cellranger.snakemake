@@ -24,6 +24,15 @@ if "reference_dir" not in CELLRANGER_CFG:
 if not os.path.exists(CELLRANGER_CFG['reference_dir']):
 	raise WorkflowError("Could not find the cellranger reference directory!")
 
+if "normalize" not in CELLRANGER_CFG:
+	CELLRANGER_CFG["normalize"] = "mapped"
+
+if CELLRANGER_CFG["normalize"] not in ["none","mapped","raw"]:
+	raise WorkflowError("The parameter 'normalize' can have only values: none, mapped, raw (see cellranger aggregate doc)!")
+
+if "nosecondary" not in CELLRANGER_CFG:
+	CELLRANGER_CFG["nosecondary"] = 0
+
 # cellranger version - export if in config otherwise use latest version
 if PROGRAM_CFG and "cellranger" in PROGRAM_CFG:
 	os.environ["CELLRANGER_VERSION"] = PROGRAM_CFG["cellranger"]
@@ -64,12 +73,15 @@ rule run_cellranger_aggregate:
 		"cellranger/all/cellranger_aggregate.done"
 	log:
 		"cellranger/log/all.cellranger_aggregate.log"
+	params:
+		normalize = CELLRANGER_CFG["normalize"],
+		nosecondary = "--nosecondary" if CELLRANGER_CFG["nosecondary"] else ""
 	shell:
 		"""
 		(rm -r cellranger/all
 		if [[ "$(hostname)" == "login-0-0.local" ]] ;then jobmode="sge"; else jobmode="local";fi
 		
-		cd cellranger && run_cellranger aggr --id=all --csv=aggregate_samples.csv --normalize=mapped --jobmode=$jobmode) >& {log}
+		cd cellranger && run_cellranger aggr --id=all --csv=aggregate_samples.csv --normalize={params.normalize} {params.nosecondary} --jobmode=$jobmode) >& {log}
 		touch {output}
 		"""
 

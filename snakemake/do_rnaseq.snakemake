@@ -39,7 +39,7 @@ rule do_rnaseq:
 
 rule build_rnaseq_report_script:
 	params:
-		template="/group/sequencing/Bfx/scripts/mathias/dsp/dsp/files/figure-report-config.csv"
+		template="/group/sequencing/Bfx/scripts/common/dsp/dsp/files/figure-report-config.csv"
 	output:
 		"report/"+PROJECT+"_figure-report-config.csv",
 		"report/"+PROJECT+"_build_report.sh"
