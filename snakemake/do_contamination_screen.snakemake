@@ -34,7 +34,7 @@ else:
 # Targets #
 ###########
 
-CONTAMINATION_TARGETS = ["fastq_screen/report/data/"+PROJECT+"_contamination_database_specific_hits.csv","fastq_screen/report/data/"+PROJECT+"_no_hits.csv","fastq_screen/report/pdf/"+PROJECT+"_contamination_database_specific_hits.pdf","fastq_screen/report/pdf/"+PROJECT+"_no_hits.pdf"]
+CONTAMINATION_TARGETS = ["fastq_screen/report/data/"+PROJECT+"_contamination_species_specific_hits.csv","fastq_screen/report/data/"+PROJECT+"_no_hits.csv","fastq_screen/report/pdf/"+PROJECT+"_contamination_species_specific_hits.pdf","fastq_screen/report/pdf/"+PROJECT+"_no_hits.pdf"]
 
 ##########
 # Checks #
