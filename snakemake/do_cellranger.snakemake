@@ -79,9 +79,9 @@ rule run_cellranger_aggregate:
 	shell:
 		"""
 		(rm -r cellranger/all
-		if [[ "$(hostname)" == "login-0-0.local" ]] ;then jobmode="sge"; else jobmode="local";fi
+		if [[ "$(hostname)" == "login-0-0.local" ]] ;then jobparams="--jobmode=sge --localcores=1 --localmem=1"; else jobmode="--jobmode=local";fi
 		
-		cd cellranger && run_cellranger aggr --id=all --csv=aggregate_samples.csv --normalize={params.normalize} {params.nosecondary} --jobmode=$jobmode) >& {log}
+		cd cellranger && run_cellranger aggr --id=all --csv=aggregate_samples.csv --normalize={params.normalize} {params.nosecondary} $jobparams) >& {log}
 		touch {output}
 		"""
 
@@ -111,8 +111,8 @@ rule run_cellranger_count:
 	shell:
 		"""
 		(rm -r cellranger/{wildcards.sample}
-		if [[ "$(hostname)" == "login-0-0.local" ]] ;then jobmode="sge"; else jobmode="local";fi
-		cd cellranger && run_cellranger count --id={wildcards.sample} --fastqs=fastq/ --sample={wildcards.sample} --description={wildcards.sample} --transcriptome={params.cellranger_ref} --jobmode=$jobmode) >& {log}
+		if [[ "$(hostname)" == "login-0-0.local" ]] ;then jobparams="--jobmode=sge --localcores=1 --localmem=1"; else jobmode="--jobmode=local";fi
+		cd cellranger && run_cellranger count --id={wildcards.sample} --fastqs=fastq/ --sample={wildcards.sample} --description={wildcards.sample} --transcriptome={params.cellranger_ref} $jobparams) >& {log}
 		touch {output}
 		"""
 

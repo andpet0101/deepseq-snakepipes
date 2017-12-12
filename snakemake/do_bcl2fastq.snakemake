@@ -67,11 +67,13 @@ rule run_fastqcdemultiplex:
 		done = fq_storage+longid+'/log/fastqc.done'
 	log:
 		fq_storage+longid+'/log/fastqc.log'
+	threads:
+		8
 	shell:
 		"""
 		module load apps/fastqc
 		mkdir -p {fq_storage}{longid}/fastqc
-		find {fq_storage}{longid} -type f -name "*fastq.gz" | xargs -L $NSLOTS fastqc -k 10 -t $NSLOTS -a /group/sequencing/Bfx/scripts/mathias/deep_seq_pipeline/deep_seq_pipeline/files/fastqc_adapter.txt -o {fq_storage}{longid}/fastqc --nogroup >& {log}
+		find {fq_storage}{longid} -type f -name "*fastq.gz" | xargs -L ${{NSLOTS:-{threads}}} fastqc -k 10 -t ${{NSLOTS:-{threads}}} -a /group/sequencing/Bfx/scripts/mathias/deep_seq_pipeline/deep_seq_pipeline/files/fastqc_adapter.txt -o {fq_storage}{longid}/fastqc --nogroup >& {log}
 		touch {output.done}
 		"""
 

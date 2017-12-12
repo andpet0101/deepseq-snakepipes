@@ -40,7 +40,7 @@ bfx_id = arguments[1]
 data_directory = arguments[2]
 pdf_directory = arguments[3]
 
-#bfx_id = "bfx839"
+#bfx_id = "bfx853"
 #data_directory = "fastq_screen/report/data"
 #pdf_directory = "fastq_screen/report/pdf"
 
@@ -192,10 +192,10 @@ databases_plot_data = merge(databases_plot_data,library_row,by="Library")
 plot_size = calc_facet_plot_size(length(unique(databases_plot_data$Row)))
 
 # plot database distribution
-database_specific_hits_plot = ggplot(databases_plot_data,aes(x=Library,y=perc_One_hit_one_genome+perc_Multiple_hits_one_genome,fill=Database)) + 
+database_specific_hits_plot = ggplot(databases_plot_data,aes(x=Sample,y=perc_One_hit_one_genome+perc_Multiple_hits_one_genome,fill=Database)) + 
  	geom_bar(stat="identity",position=position_stack(reverse=T)) +
  	theme_bw(11) +
- 	scale_x_discrete("Sample",labels=unique(databases_plot_data[order(databases_plot_data$Library),"Sample"])) + 
+ 	scale_x_discrete("Sample") + 
  	scale_y_continuous("Percentage of reads",limits=c(0,100)) +
  	scale_fill_manual("Species",values=color_brewer_qual_palette) +
  	facet_wrap(~ Row,scales="free",ncol=plot_size$num_columns) +
