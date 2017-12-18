@@ -41,7 +41,7 @@ rule run_fqtransport:
 	shell:
 		"""
 		module load apps/python/2.7.8
-		export PYTHONPATH=/group/sequencing/Bfx/scripts/mathias/dsp/dsp/src
+		export PYTHONPATH=/group/sequencing/Bfx/scripts/common/dsp/dsp/src
 		/group/sequencing/Bfx/scripts/common/transport_fqfiles.py -d {pipelining}{longid} -o {fq_storage}{longid} -q {transid}
 		while [ -n "$(qstat -j "{transid}" 2> /dev/null)" ] ; do sleep 5 ; done
 		touch {output.done}
@@ -54,7 +54,7 @@ rule run_fqintodatabase:
 		done = fq_storage+longid+'/log/fq_into_db.done'
 	shell:
 		"""
-		export PYTHONPATH=/group/sequencing/Bfx/scripts/mathias/dsp/dsp/src
+		export PYTHONPATH=/group/sequencing/Bfx/scripts/common/dsp/dsp/src
 		module load apps/python/2.7.8
 		python /group/sequencing/Bfx/scripts/common/fastq_into_database.py -d {fq_storage}{longid} -s {bcl2fastqversion}
 		touch {output.done}
@@ -73,7 +73,7 @@ rule run_fastqcdemultiplex:
 		"""
 		module load apps/fastqc
 		mkdir -p {fq_storage}{longid}/fastqc
-		find {fq_storage}{longid} -type f -name "*fastq.gz" | xargs -L ${{NSLOTS:-{threads}}} fastqc -k 10 -t ${{NSLOTS:-{threads}}} -a /group/sequencing/Bfx/scripts/mathias/deep_seq_pipeline/deep_seq_pipeline/files/fastqc_adapter.txt -o {fq_storage}{longid}/fastqc --nogroup >& {log}
+		find {fq_storage}{longid} -type f -name "*fastq.gz" | xargs -L ${{NSLOTS:-{threads}}} fastqc -k 10 -t ${{NSLOTS:-{threads}}} -a /group/sequencing/Bfx/scripts/common/deep_seq_pipeline/deep_seq_pipeline/files/fastqc_adapter.txt -o {fq_storage}{longid}/fastqc --nogroup >& {log}
 		touch {output.done}
 		"""
 
