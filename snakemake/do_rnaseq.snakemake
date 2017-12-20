@@ -49,7 +49,7 @@ rule build_rnaseq_report_script:
 		with open(output[1],"w") as outstream:
 			outstream.write("#!/bin/bash\n\n")
 			outstream.write("module load apps/python\n")
-			outstream.write("export PYTHONPATH=/group/sequencing/Bfx/scripts/mathias/dsp/dsp/src:$PYTHONPATH\n\n")
+			outstream.write("export PYTHONPATH=/group/sequencing/Bfx/scripts/common/dsp/dsp/src:$PYTHONPATH\n\n")
 			outstream.write("/group/sequencing/Bfx/scripts/common/figures_report.py -i ../" + ALIGNER_CFG["program"] + "/report/pdf/ ../genecount/report/pdf/ ../de-analysis/pdf/ ")
 			outstream.write(" -c " + PROJECT + "_figure-report-config.csv -r . -b " + PROJECT + " -p projects/" + PROJECT + "/pdf/\n")
 			outstream.write("/group/sequencing/Bfx/scripts/common/build_report.py -r . -b " + PROJECT + " -d ../de-analysis/")
