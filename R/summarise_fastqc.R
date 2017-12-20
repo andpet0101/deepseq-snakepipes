@@ -15,9 +15,9 @@ library(dplyr)
 library(tidyr)
 library(grid)
 
-#############
-# Arguments #
-#############
+##############
+# Arguments  #
+##############
 
 arguments = commandArgs(trailingOnly = F)
 # get path to script
