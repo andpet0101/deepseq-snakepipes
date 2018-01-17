@@ -376,7 +376,7 @@ if("per_base_sequence_content" %in% names(fastqc_result)){
 		scale_fill_manual("Nt",values=c("#1f78b4","#e31a1c","#6a3d9a","#33a02c")) +
 		scale_colour_manual("Nt",values=c("#1f78b4","#e31a1c","#6a3d9a","#33a02c")) +
 		facet_grid(~Read) +
-		theme(,axis.text.x=element_text(angle=45,vjust=1,hjust=1)) + 
+		theme(axis.text.x=element_text(angle=45,vjust=1,hjust=1)) + 
 		ggtitle("Per base sequence content")
 	}
 	ggsave(paste(pdf_directory,paste(bfx_id,"per_base_sequence_content.pdf",sep="_"),sep="/"),plot=per_base_sequence_content_plot,width=8,height=11)
@@ -621,7 +621,7 @@ if("overrepresented_sequences" %in% names(fastqc_result)){
 
 # adapter content
 if("adapter_content" %in% names(fastqc_result)){
-	adapter_content_m = gather(fastqc_result$adapter_content,Adapter,Content,-c(Position,Library,Read,Library_read))
+	adapter_content_m = tidyr::gather(fastqc_result$adapter_content,Adapter,Content,-c(Position,Library,Read,Library_read))
 	x_axis_breaks = levels(fastqc_result$adapter_content$Position)
 	x_axis_labels = sapply(1:length(x_axis_breaks),function(x){ifelse(x%%5==1,x_axis_breaks[x],"")})
 	if(!too_many_datasets){
