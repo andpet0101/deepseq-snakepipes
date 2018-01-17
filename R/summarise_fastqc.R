@@ -691,7 +691,7 @@ if("adapter_content" %in% names(fastqc_result)){
 }
 
 # k-mer content  - select only one kmer per position
-if("kmer_content" %in% names(fastqc_result)){
+if("kmer_content" %in% names(fastqc_result) && length(fastqc_result$kmer_content$Max.Obs.Exp.Position)>0){
 	kmer_content_plot_data = fastqc_result$kmer_content %>% group_by(Library,Read,Library_read,Max.Obs.Exp.Position) %>% mutate(Rank = rank(-Obs.Exp.Max)) %>% filter(Rank==1) %>%
 	group_by(Library,Read,Library_read) %>% mutate(Plot_row=rank(Max.Obs.Exp.Position)) %>% as.data.frame()
 	kmer_content_plot_data$Sequence = factor(kmer_content_plot_data$Sequence)
