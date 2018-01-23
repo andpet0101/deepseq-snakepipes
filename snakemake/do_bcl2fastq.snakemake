@@ -73,7 +73,7 @@ rule run_fastqcdemultiplex:
 		"""
 		module load apps/fastqc
 		mkdir -p {fq_storage}{longid}/fastqc
-		find {fq_storage}{longid} -type f -name "*fastq.gz" | xargs -L ${{NSLOTS:-{threads}}} fastqc -k 10 -t ${{NSLOTS:-{threads}}} -a /group/sequencing/Bfx/scripts/common/dsp/dsp/files/fastqc_adapter.txt -o {fq_storage}{longid}/fastqc --nogroup >& {log}
+		find {fq_storage}{longid} -type f -name "*fastq.gz" | xargs -L ${{NSLOTS:-{threads}}} fastqc -t ${{NSLOTS:-{threads}}} -a /group/sequencing/Bfx/scripts/common/dsp/dsp/files/fastqc_adapter.txt -o {fq_storage}{longid}/fastqc --nogroup >& {log}
 		touch {output.done}
 		"""
 
