@@ -1,10 +1,5 @@
 #!/usr/bin/env Rscript
 
-# reorders the library paths so that user paths will be the last place to look for libraries
-lib_paths = .libPaths()
-home_last_order = order(grepl('^/home',.libPaths()))
-.libPaths(lib_paths[home_last_order])
-
 library(plyr)
 library(ggplot2)
 theme_set(theme_bw(12))

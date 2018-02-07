@@ -23,14 +23,14 @@
 	"run_gsnap_single" :
 	{
 		"runtime" : "48:00:00",
-		"memory" : "60G",
+		"memory" : "40G",
 		"cpu" : "8-20",
 		"other_resources" : "sse42"
 	},
 	"run_gsnap_paired" :
 	{
 		"runtime" : "48:00:00",
-		"memory" : "60G",
+		"memory" : "40G",
 		"cpu" : "8-20",
 		"other_resources" : "sse42"
 	},
@@ -141,7 +141,7 @@
 	{
 		"cpu" : "8",
 		"runtime" : "96:00:00",
-		"memory" : "120G"	
+		"memory" : "60G"	
 	},	
 	"run_GATK_VariantRecalibrator_snp" :
 	{

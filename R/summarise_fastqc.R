@@ -1,11 +1,5 @@
 #!/usr/bin/env Rscript
 
-# reorders the library paths so that user paths will be the last place to look for libraries
-lib_paths = .libPaths()
-home_last_order = order(grepl('^/home',.libPaths()))
-.libPaths(lib_paths[home_last_order])
-
-
 library(ggplot2)
 library(plyr)
 library(scales)
@@ -13,11 +7,10 @@ theme_set(theme_bw(12))
 library(reshape2)
 library(dplyr)
 library(tidyr)
-library(grid)
 
-##############
-# Arguments  #
-##############
+#############
+# Arguments #
+#############
 
 arguments = commandArgs(trailingOnly = F)
 # get path to script
@@ -40,7 +33,7 @@ bfx_id = arguments[1]
 data_directory = arguments[2]
 pdf_directory = arguments[3]
 
-#bfx_id = "bfx735"
+#bfx_id = "bfx708"
 #data_directory = "fastqc/report/data"
 #pdf_directory = "fastqc/report/pdf"
 
@@ -227,23 +220,6 @@ for(t in names(fastqc_result)){
 	fastqc_result[[t]] = fastqc_result[[t]][,column_names]
 }
 
-# do some minor data fixing
-fastqc_result$summary$Status = factor(fastqc_result$summary$Status,levels=c("pass","warn","fail"))
-fastqc_result$summary$Metric = factor(fastqc_result$summary$Metric,levels=unique(fastqc_result$summary$Metric))
-fastqc_result$per_base_sequence_quality$Base = factor(fastqc_result$per_base_sequence_quality$Base,levels=unique(fastqc_result$per_base_sequence_quality$Base),ordered=T)
-fastqc_result$per_base_sequence_content$Base = factor(fastqc_result$per_base_sequence_content$Base,levels=unique(fastqc_result$per_base_sequence_content$Base),ordered=T)
-fastqc_result$per_base_n_content$Base = factor(fastqc_result$per_base_n_content$Base,levels=unique(fastqc_result$per_base_n_content$Base),ordered=T)
-fastqc_result$adapter_content$Position = factor(fastqc_result$adapter_content$Position,levels=levels(fastqc_result$per_base_n_content$Base))
-fastqc_result$kmer_content$Max.Obs.Exp.Position = factor(fastqc_result$kmer_content$Max.Obs.Exp.Position,levels=unique(fastqc_result$kmer_content$Max.Obs.Exp.Position))
-fastqc_result$sequence_length_distribution$Length = factor(fastqc_result$sequence_length_distribution$Length,levels=unique(fastqc_result$sequence_length_distribution$Length))
-
-fastqc_result$per_sequence_quality_scores = fastqc_result$per_sequence_quality_scores %>% group_by(Library_read) %>% mutate(Fraction=Count/sum(Count+1)) %>% as.data.frame()
-fastqc_result$per_base_n_content = fastqc_result$per_base_n_content %>% group_by(Library_read) %>% mutate(Fraction=N.Count/sum(N.Count+1)) %>% as.data.frame()
-fastqc_result$per_sequence_gc_content = fastqc_result$per_sequence_gc_content %>% group_by(Library_read) %>% mutate(Fraction=Count/sum(Count+1)) %>% as.data.frame()
-fastqc_result$sequence_length_distribution = fastqc_result$sequence_length_distribution %>% group_by(Library,Read,Library_read) %>% mutate(Fraction=Count/sum(Count+1)) %>% as.data.frame()
-
-
-
 # thats it - now do plots
 
 # too many datasets? - do different plots
@@ -251,6 +227,8 @@ too_many_datasets = length(fastqc_files) > 20
 
 
 # summary (note: fastqc_result$summary = fastqc_result[['summary']])
+fastqc_result$summary$Status = factor(fastqc_result$summary$Status,levels=c("pass","warn","fail"))
+fastqc_result$summary$Metric = factor(fastqc_result$summary$Metric,levels=unique(fastqc_result$summary$Metric))
 num_plots = length(unique(fastqc_result$summary$Read))
 plot_size = list(num_columns = num_plots,num_rows=1,height=8,width=ifelse(num_plots==1,8,12))
 
@@ -280,114 +258,115 @@ write.table(fastqc_result$summary[,-3],paste(data_directory,paste(bfx_id,"fastqc
 
 # per base sequence quality
 if("per_base_sequence_quality" %in% names(fastqc_result)){
-	x_axis_breaks = levels(fastqc_result$per_base_sequence_quality$Base)
-	x_axis_labels = sapply(1:length(x_axis_breaks),function(x){ifelse(x%%5==1,x_axis_breaks[x],"")})
-
+	max_qual = max(fastqc_result$per_base_sequence_quality$X90th.Percentile)
 	if(!too_many_datasets){
 		plot_size = calc_facet_plot_size(length(unique(fastqc_result$per_base_sequence_quality$Library_read)))
 		per_base_sequence_quality_plot = ggplot(fastqc_result$per_base_sequence_quality,aes(x=Base)) + 
 		geom_boxplot(aes(ymin=X10th.Percentile,lower=Lower.Quartile,middle=Median,upper=Upper.Quartile,ymax=X90th.Percentile),stat="identity",fill="yellow") +
 		geom_line(aes(y=Mean,group=Library),colour="red") +
 		theme_bw(12) +
-		scale_x_discrete("Position in read (bp)",limits=x_axis_breaks,breaks=x_axis_breaks,labels=x_axis_labels) +
-		scale_y_continuous("Quality",limits=c(0,max(fastqc_result$per_base_sequence_quality$X90th.Percentile))) +
+		theme(legend.position="bottom") +
+		scale_x_discrete("Position in read (bp)") +
+		scale_y_continuous("Quality",limits=c(0,max_qual)) +
 		facet_wrap(~Library_read,ncol=plot_size$num_columns,scales="free_x") +
-		theme(legend.position="bottom",axis.text.x=element_text(angle=45,vjust=1,hjust=1)) +
 		ggtitle("Per base sequence quality distribution")
 	} else {
 		per_base_sequence_quality_m = gather(fastqc_result$per_base_sequence_quality,Metric,Value,-c(Library,Read,Library_read,Base))
 		per_base_sequence_quality_m$Metric_read = factor(paste(per_base_sequence_quality_m$Metric,per_base_sequence_quality_m$Read),
-		                                                 levels=apply(expand.grid(c("X10th.Percentile","Lower.Quartile","Mean","Median","Upper.Quartile","X90th.Percentile"),unique(per_base_sequence_quality_m$Read)),1,paste,collapse=" "))		
-		
+		                                                 levels=apply(expand.grid(c("X10th.Percentile","Lower.Quartile","Mean","Median","Upper.Quartile","X90th.Percentile"),unique(per_base_sequence_quality_m$Read)),1,paste,collapse=" "))
 		plot_size = calc_facet_plot_size(length(unique(per_base_sequence_quality_m$Metric)))	
 		per_base_sequence_quality_plot = ggplot(per_base_sequence_quality_m,aes(x=Base,y=Value)) + 
 		geom_boxplot(fill="yellow",outlier.size=1) +
 		theme_bw(12) +
-		scale_x_discrete("Position in read (bp)",limits=x_axis_breaks,breaks=x_axis_breaks,labels=x_axis_labels) +
-		scale_y_continuous("Quality",limits=c(0,max(fastqc_result$per_base_sequence_quality$X90th.Percentile))) +
+		scale_x_discrete("Position in read (bp)") + 
+		scale_y_continuous("Quality",limits=c(0,max_qual)) +
 		facet_wrap(~Metric_read,ncol=plot_size$num_columns) +
-		theme(legend.position="bottom",axis.text.x=element_text(angle=45,vjust=1,hjust=1)) +
+		theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5),legend.position="bottom") +
 		ggtitle("Per base sequence quality distribution")
 	}
 	ggsave(paste(pdf_directory,paste(bfx_id,"per_base_sequence_quality.pdf",sep="_"),sep="/"),plot=per_base_sequence_quality_plot,width=plot_size$width,height=plot_size$height)
 	write.table(fastqc_result$per_base_sequence_quality[,-3],paste(data_directory,paste(bfx_id,"per_base_sequence_quality.csv",sep="_"),sep="/"),col.names=T,row.names=F,sep="\t",quote=F)
-}else{
-	file.create(paste(data_directory,paste(bfx_id,"per_base_sequence_quality.csv",sep="_"),sep="/"))
-	ggsave(grid.text("No per base sequence quality plot possible"),file=paste(pdf_directory,paste(bfx_id,"per_base_sequence_quality.pdf",sep="_"),sep="/"))
 }
 
 # per sequence quality scores
 if("per_base_sequence_quality" %in% names(fastqc_result)){
+	fastqc_result$per_sequence_quality_scores = fastqc_result$per_sequence_quality_scores %>% group_by(Library_read) %>% mutate(Fraction=Count/sum(Count+1)) %>% as.data.frame()
+	max_qual = max(fastqc_result$per_sequence_quality_scores$Quality)+1
 	num_plots = length(unique(fastqc_result$per_sequence_quality_scores$Read))
 	plot_size = list(num_columns = num_plots,num_rows=1,height=8,width=ifelse(num_plots==1,8,12))
-
 	if(!too_many_datasets){
 		per_sequence_quality_scores_plot = ggplot(fastqc_result$per_sequence_quality_scores,aes(x=Quality,y=Fraction,colour=Library)) +
 		geom_line() +
 		theme_bw(12) +
-		scale_x_continuous("Quality",limits=c(0,max(fastqc_result$per_sequence_quality_scores$Quality)+1)) +
+		scale_x_continuous("Quality",limits=c(0,max_qual)) +
 		scale_y_continuous("Fraction of reads") +
 		scale_colour_manual("Library",values=color_brewer_qual_palette) +
 		ggtitle("Per sequence quality scores") +
 		facet_wrap(~Read,scales="free_x",ncol=plot_size$num_columns) +
-		theme(axis.text.x=element_text(angle=45,hjust=1,vjust=1),legend.position="bottom")
+		theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5),legend.position="bottom")
 	} else {
 		mean_sequence_quality_scores = fastqc_result$per_sequence_quality_scores %>% group_by(Quality) %>% summarise(Fraction=mean(Fraction)) %>% as.data.frame()
 		per_sequence_quality_scores_plot = ggplot(fastqc_result$per_sequence_quality_scores,aes(x=Quality,y=Fraction,group=Quality)) +
 		geom_boxplot(fill="yellow") +
 		geom_point(data=mean_sequence_quality_scores,aes(x=Quality,y=Fraction,group=1),colour="red",shape=3) +	
 		theme_bw(12) +
-		scale_x_continuous("Quality",limits=c(0,max(fastqc_result$per_sequence_quality_scores$Quality)+1)) +
+		scale_x_continuous("Quality",limits=c(0,max_qual)) +
 		scale_y_continuous("Fraction of reads") +
 		facet_wrap(~Read,ncol=plot_size$num_columns) +
 		ggtitle("Per sequence quality scores")
 	}
 	ggsave(paste(pdf_directory,paste(bfx_id,"per_sequence_quality_scores.pdf",sep="_"),sep="/"),plot=per_sequence_quality_scores_plot,width=plot_size$width,height=plot_size$height)
 	write.table(fastqc_result$per_sequence_quality_scores[,-3],paste(data_directory,paste(bfx_id,"per_sequence_quality_scores.csv",sep="_"),sep="/"),col.names=T,row.names=F,sep="\t",quote=F)
-}else{
-	file.create(paste(data_directory,paste(bfx_id,"per_sequence_quality_scores.csv",sep="_"),sep="/"))
-	ggsave(grid.text("No per sequence quality scores plot possible"),file=paste(pdf_directory,paste(bfx_id,"per_sequence_quality_scores.pdf",sep="_"),sep="/"))
 }
 
 # per sequence base content
 if("per_base_sequence_content" %in% names(fastqc_result)){
 	per_base_sequence_content_m = gather(fastqc_result$per_base_sequence_content,Nt,Percent,-c(Base,Library,Read,Library_read))
-	x_axis_breaks = levels(per_base_sequence_content_m$Base)
-	x_axis_labels = sapply(1:length(x_axis_breaks),function(x){ifelse(x%%5==1,x_axis_breaks[x],"")})
+	per_base_sequence_content_m$Base = factor(per_base_sequence_content_m$Base,levels=unique(per_base_sequence_content_m$Base))
 	if(!too_many_datasets){
 		plot_size = calc_facet_plot_size(length(unique(per_base_sequence_content_m$Library_read)))
 		per_base_sequence_content_plot = ggplot(per_base_sequence_content_m,aes(x=Base,y=Percent,colour=Nt,group=Nt)) +
 		geom_line() +
 		geom_hline(yintercept=25,colour="gray",linetype="dashed") +
 		theme_bw(12) +
-		scale_x_discrete("Position in read (bp)",limits=x_axis_breaks,breaks=x_axis_breaks,labels=x_axis_labels) +
+		scale_x_discrete("Base") +
 		scale_y_continuous("Percentage of reads") +
 		scale_colour_manual("Nt",values=c("#1f78b4","#e31a1c","#6a3d9a","#33a02c")) +
 		ggtitle("Per base sequence content") +
 		facet_wrap(~Library_read,scales="free_x",ncol=plot_size$num_columns) +
-		theme(legend.position="bottom",axis.text.x=element_text(angle=45,vjust=1,hjust=1))
+		theme(legend.position="bottom")
 	} else {
-		per_base_sequence_content_m = per_base_sequence_content_m %>% group_by(Read,Base,Nt) %>% summarise(Percent = mean(Percent)) %>% as.data.frame()
+		#per_base_sequence_content_m = per_base_sequence_content_m %>% group_by(Library,Read,Library_read) %>% 
+		#	mutate(AbsBase = ifelse(Read=="R2",Base+max(Base),Base)) %>% arrange(Read,Base,Library,Nt) %>% as.data.frame()
+		num_plots = unique(length(per_base_sequence_content_m$Library))*unique(length(per_base_sequence_content_m$AbsBase))
+		plot_size = calc_facet_plot_size(length(unique(per_base_sequence_content_m$Library)))
+		plot_size$height = 11
 		per_base_sequence_content_plot = ggplot(per_base_sequence_content_m,aes(x=Base,y=Percent,colour=Nt,fill=Nt,group=paste0(Read,Base,Nt))) +
 		geom_bar(position="stack",stat="identity") +
 		theme_bw(10) +
-		scale_x_discrete("Position in read (bp)",limits=x_axis_breaks,breaks=x_axis_breaks,labels=x_axis_labels,expand=c(0,0)) +
-		scale_y_continuous("Percentage of reads",expand=c(0,0)) +
+		scale_x_discrete("Base",expand=c(0,0)) +
+		scale_y_continuous("Reads",expand=c(0,0)) +
 		scale_fill_manual("Nt",values=c("#1f78b4","#e31a1c","#6a3d9a","#33a02c")) +
 		scale_colour_manual("Nt",values=c("#1f78b4","#e31a1c","#6a3d9a","#33a02c")) +
 		facet_grid(~Read) +
-		theme(axis.text.x=element_text(angle=45,vjust=1,hjust=1)) + 
 		ggtitle("Per base sequence content")
+#		per_base_sequence_content_plot = ggplot(per_base_sequence_content_m,aes(x=1,y=Percent,fill=Nt)) +
+#		geom_bar(position="stack",stat="identity") +
+#		theme_bw(10) +
+#		scale_x_discrete("Library",expand=c(0,0)) +
+#		scale_y_continuous("Base",expand=c(0,0)) +
+#		scale_fill_manual("Nt",values=c("#1f78b4","#e31a1c","#6a3d9a","#33a02c")) +
+#		facet_grid(Library~AbsBase) +
+#		theme(axis.text=element_blank(),axis.ticks=element_blank(),legend.position="bottom",panel.margin=unit(0, "pt"),strip.text.y=element_text(angle=0)) +
+#		ggtitle("Per base sequence content")
 	}
 	ggsave(paste(pdf_directory,paste(bfx_id,"per_base_sequence_content.pdf",sep="_"),sep="/"),plot=per_base_sequence_content_plot,width=8,height=11)
 	write.table(fastqc_result$per_base_sequence_content[,-3],paste(data_directory,paste(bfx_id,"per_base_sequence_content.csv",sep="_"),sep="/"),col.names=T,row.names=F,sep="\t",quote=F)
-}else{
-	file.create(paste(data_directory,paste(bfx_id,"per_base_sequence_content.csv",sep="_"),sep="/"))
-	ggsave(grid.text("No per base sequence content plot possible"),file=paste(pdf_directory,paste(bfx_id,"per_base_sequence_content.pdf",sep="_"),sep="/"))
 }
 
 # per sequence GC content
 if("per_sequence_gc_content" %in% names(fastqc_result)){
+	fastqc_result$per_sequence_gc_content = fastqc_result$per_sequence_gc_content %>% group_by(Library_read) %>% mutate(Fraction=Count/sum(Count+1)) %>% as.data.frame()
 	num_plots = length(unique(fastqc_result$per_sequence_gc_content$Read))
 	plot_size = list(num_columns = num_plots,num_rows=1,height=8,width=ifelse(num_plots==1,8,12))	
 	if(!too_many_datasets){
@@ -413,27 +392,25 @@ if("per_sequence_gc_content" %in% names(fastqc_result)){
 	}
 	ggsave(paste(pdf_directory,paste(bfx_id,"per_sequence_gc_content.pdf",sep="_"),sep="/"),plot=per_sequence_gc_content_plot,width=plot_size$width,height=plot_size$height)
 	write.table(fastqc_result$per_sequence_gc_content[,-3],paste(data_directory,paste(bfx_id,"per_sequence_gc_content.csv",sep="_"),sep="/"),col.names=T,row.names=F,sep="\t",quote=F)
-}else{
-	file.create(paste(data_directory,paste(bfx_id,"per_sequence_gc_content.csv",sep="_"),sep="/"))
-	ggsave(grid.text("No per sequence GC content plot possible"),file=paste(pdf_directory,paste(bfx_id,"per_sequence_gc_content.pdf",sep="_"),sep="/"))
 }
 
 
 # per base N content
 if("per_base_n_content" %in% names(fastqc_result)){
-	x_axis_breaks = levels(fastqc_result$per_base_n_content$Base)
-	x_axis_labels = sapply(1:length(x_axis_breaks),function(x){ifelse(x%%5==1,x_axis_breaks[x],"")})
+	fastqc_result$per_base_n_content = fastqc_result$per_base_n_content %>% group_by(Library_read) %>% mutate(Fraction=N.Count/sum(N.Count+1)) %>% as.data.frame()
+	max_base = max(fastqc_result$per_base_n_content$Base)
+	max_n = ifelse(max(fastqc_result$per_base_n_content$Fraction)==0,1,max(fastqc_result$per_base_n_content$Fraction))
 	num_plots = length(unique(fastqc_result$per_base_n_content$Read))
 	plot_size = list(num_columns = num_plots,num_rows=1,height=8,width=ifelse(num_plots==1,8,12))	
 	if(!too_many_datasets){
 		per_base_n_content_plot = ggplot(fastqc_result$per_base_n_content,aes(x=Base,y=Fraction,colour=Library)) +
 		geom_line() +
 		theme_bw(12) +
-		scale_x_discrete("Position in read (bp)",limits=x_axis_breaks,breaks=x_axis_breaks,labels=x_axis_labels) +
-		scale_y_continuous("Fraction of reads",limits=c(0,ifelse(max(fastqc_result$per_base_n_content$Fraction)==0,1,max(fastqc_result$per_base_n_content$Fraction)))) +
+		scale_x_discrete("Base",limits=c(0,max_base)) +
+		scale_y_continuous("Fraction of reads",limits=c(0,max_n)) +
 		scale_colour_manual("Library",values=color_brewer_qual_palette) +
 		facet_wrap(~Read,scales="free_x",ncol=plot_size$num_columns) +
-		theme(legend.position="bottom",axis.text.x=element_text(angle=45,vjust=1,hjust=1)) +
+		theme(legend.position="bottom") +
 		ggtitle("Per sequence N content")
 	} else {
 		mean_per_base_content_fraction = fastqc_result$per_base_n_content %>% group_by(Base) %>% summarise(Fraction=mean(Fraction)) %>% as.data.frame()
@@ -441,24 +418,19 @@ if("per_base_n_content" %in% names(fastqc_result)){
 		geom_boxplot(fill="yellow") +
 		geom_point(data=mean_per_base_content_fraction,aes(x=Base,y=Fraction,group=1),colour="red",shape=3) +	
 		theme_bw(12) +
-		scale_x_discrete("Position in read (bp)",limits=x_axis_breaks,breaks=x_axis_breaks,labels=x_axis_labels) +
-		scale_y_continuous("Fraction of reads",limits=c(0,ifelse(max(fastqc_result$per_base_n_content$Fraction)==0,1,max(fastqc_result$per_base_n_content$Fraction)))) +
+		scale_x_discrete("Base",limits=c(0,max_base)) +
+		scale_y_continuous("Fraction of reads",limits=c(0,max_n)) +
 		facet_wrap(~Read,ncol=plot_size$num_columns,scales="free_x") +
-		theme(axis.text.x=element_text(angle=45,vjust=1,hjust=1)) +
 		ggtitle("Per base N content")
 	}
 	ggsave(paste(pdf_directory,paste(bfx_id,"per_base_n_content.pdf",sep="_"),sep="/"),plot=per_base_n_content_plot,width=plot_size$width,height=plot_size$height)
 	write.table(fastqc_result$per_base_n_content[,-3],paste(data_directory,paste(bfx_id,"per_base_n_content.csv",sep="_"),sep="/"),col.names=T,row.names=F,sep="\t",quote=F)
-}else{
-	file.create(paste(data_directory,paste(bfx_id,"per_base_n_content.csv",sep="_"),sep="/"))
-	ggsave(grid.text("No per base N content plot possible"),file=paste(pdf_directory,paste(bfx_id,"per_base_n_content.pdf",sep="_"),sep="/"))
 }
-
 
 # sequence length distribution
 if("sequence_length_distribution" %in% names(fastqc_result)){
-	x_axis_breaks = levels(fastqc_result$sequence_length_distribution$Length)
-	x_axis_labels = sapply(1:length(x_axis_breaks),function(x){ifelse(x%%5==1,x_axis_breaks[x],"")})
+	max_len = max(fastqc_result$sequence_length_distribution$Length)
+	fastqc_result$sequence_length_distribution = fastqc_result$sequence_length_distribution %>% group_by(Library,Read,Library_read) %>% mutate(Fraction=Count/sum(Count+1)) %>% as.data.frame()
 	num_plots = length(unique(fastqc_result$sequence_length_distribution$Read))
 	plot_size = list(num_columns = num_plots,num_rows=1,height=8,width=ifelse(num_plots==1,8,12))
 	num_columns = plot_size$num_columns
@@ -469,7 +441,7 @@ if("sequence_length_distribution" %in% names(fastqc_result)){
 		geom_line() +
 		geom_point() +
 		theme_bw(12) +
-		scale_x_discrete("Length",limits=x_axis_breaks,breaks=x_axis_breaks,labels=x_axis_labels) +
+		scale_x_continuous("Length",limits=c(0,max_len)) +
 		scale_y_continuous("Fraction of reads",limits=c(0,1)) +
 		scale_colour_manual("Library",values=color_brewer_qual_palette) +
 		facet_wrap(~Read,ncol=plot_size$num_columns,scales="free_x") +
@@ -481,17 +453,14 @@ if("sequence_length_distribution" %in% names(fastqc_result)){
 		geom_boxplot(fill="yellow") +
 		geom_point(data=mean_sequence_length_distribution_fraction,aes(x=Length,y=Fraction,group=1),colour="red",shape=3) +	
 		theme_bw(12) +
-		scale_x_discrete("Length",limits=x_axis_breaks,breaks=x_axis_breaks,labels=x_axis_labels) +
-		scale_y_continuous("Fraction of reads",limits=c(0,1)) +
+		scale_x_continuous("Length",limits=c(0,max_len)) +
+		scale_y_continuous("Fraction of reads") +
 		scale_colour_manual("Library",values=color_brewer_qual_palette) +
 		facet_wrap(~Read,ncol=plot_size$num_columns,scales="free_x") +
 		ggtitle("Sequence length distribution")
 	  }
 	ggsave(paste(pdf_directory,paste(bfx_id,"sequence_length_distribution.pdf",sep="_"),sep="/"),plot=sequence_length_distribution_plot,width=plot_size$width,height=plot_size$height)
 	write.table(fastqc_result$sequence_length_distribution[,-3],paste(data_directory,paste(bfx_id,"sequence_length_distribution.csv",sep="_"),sep="/"),col.names=T,row.names=F,sep="\t",quote=F)
-}else{
-	file.create(paste(data_directory,paste(bfx_id,"sequence_length_distribution.csv",sep="_"),sep="/"))
-	ggsave(grid.text("No sequence length distribution plot possible"),file=paste(pdf_directory,paste(bfx_id,"sequence_length_distribution.pdf",sep="_"),sep="/"))
 }
 
 # total deduplicated levels
@@ -509,7 +478,7 @@ if("total_deduplicated_levels" %in% names(fastqc_result)){
 		scale_y_continuous("Percentage of reads",limits=c(0,100)) +
 		facet_wrap(~Read,ncol=plot_size$num_columns,scales="free_x") +
 		scale_fill_manual("Library",values=color_brewer_qual_palette) +
-		theme(legend.position="none",axis.text.x=element_text(angle=45,hjust=1,vjust=1)) +
+		theme(legend.position="none",axis.text.x=element_text(angle=90,hjust=1,vjust=0.5)) +
 		ggtitle("Total reads after deduplication")
 	} else {
 		total_deduplicated_levels_plot = ggplot(fastqc_result$total_deduplicated_levels,aes(x=as.factor(1),y=Value,group=1)) +
@@ -523,9 +492,6 @@ if("total_deduplicated_levels" %in% names(fastqc_result)){
 	}
 	ggsave(paste(pdf_directory,paste(bfx_id,"total_deduplicated_levels.pdf",sep="_"),sep="/"),plot=total_deduplicated_levels_plot,width=plot_size$width,height=plot_size$height)
 	write.table(fastqc_result$total_deduplicated_levels[,-3],paste(data_directory,paste(bfx_id,"total_deduplicated_levels.csv",sep="_"),sep="/"),col.names=T,row.names=F,sep="\t",quote=F)
-}else{
-	file.create(paste(data_directory,paste(bfx_id,"total_deduplicated_levels.csv",sep="_"),sep="/"))
-	ggsave(grid.text("No total deduplicated levels plot possible"),file=paste(pdf_directory,paste(bfx_id,"total_deduplicated_levels.pdf",sep="_"),sep="/"))
 }
 
 # sequence duplication levels
@@ -541,7 +507,7 @@ if("sequence_duplication_levels" %in% names(fastqc_result)){
 		scale_y_continuous("Percentage of reads",limits=c(0,100)) +
 		facet_wrap(~Library_read,ncol=plot_size$num_columns,scales="free_x") +
 		scale_colour_manual("Duplication status",values=c("blue","red"),labels=c("After deduplication","Total reads")) +
-		theme(legend.position="bottom",axis.text.x=element_text(angle=45,hjust=1,vjust=1)) +
+		theme(legend.position="bottom",axis.text.x=element_text(angle=90,hjust=1,vjust=0.5)) +
 		ggtitle("Sequence duplication levels")
 	} else {
 		num_plots = length(unique(fastqc_result$sequence_duplication_levels$Read))
@@ -561,9 +527,6 @@ if("sequence_duplication_levels" %in% names(fastqc_result)){
 	}
 	ggsave(paste(pdf_directory,paste(bfx_id,"sequence_duplication_levels.pdf",sep="_"),sep="/"),plot=sequence_duplication_levels_plot,width=plot_size$width,height=plot_size$height)
 	write.table(fastqc_result$sequence_duplication_levels[,-3],paste(data_directory,paste(bfx_id,"sequence_duplication_levels.csv",sep="_"),sep="/"),col.names=T,row.names=F,sep="\t",quote=F)
-}else{
-	file.create(paste(data_directory,paste(bfx_id,"sequence_duplication_levels.csv",sep="_"),sep="/"))
-	ggsave(grid.text("No sequence duplication levels plot possible"),file=paste(pdf_directory,paste(bfx_id,"sequence_duplication_levels.pdf",sep="_"),sep="/"))
 }
 
 
@@ -571,6 +534,7 @@ if("sequence_duplication_levels" %in% names(fastqc_result)){
 if("overrepresented_sequences" %in% names(fastqc_result)){
 	top10_overrepresented_sequences_by_library = fastqc_result$overrepresented_sequences %>% group_by(Library) %>% mutate(Rank = rank(Percentage)) %>% arrange(desc(Rank)) %>% as.data.frame() %>% filter(Rank<=10) %>% as.data.frame()
 	top10_overrepresented_sequences_by_library$Sequence = factor(top10_overrepresented_sequences_by_library$Sequence)
+	
 	if(!too_many_datasets){
 		plot_size = calc_facet_plot_size(length(unique(top10_overrepresented_sequences_by_library$Library_read)))
 		top10_overrepresented_sequences_plot = ggplot(top10_overrepresented_sequences_by_library,aes(x=-Rank,y=Percentage)) +
@@ -613,27 +577,21 @@ if("overrepresented_sequences" %in% names(fastqc_result)){
 
 	ggsave(paste(pdf_directory,paste(bfx_id,"overrepresented_sequences.pdf",sep="_"),sep="/"),plot=top10_overrepresented_sequences_plot,width=plot_size$width,height=plot_size$height)
 	write.table(fastqc_result$overrepresented_sequences[,-3],paste(data_directory,paste(bfx_id,"overrepresented_sequences.csv",sep="_"),sep="/"),col.names=T,row.names=F,sep="\t",quote=F)
-}else{
-	file.create(paste(data_directory,paste(bfx_id,"overrepresented_sequences.csv",sep="_"),sep="/"))
-	ggsave(grid.text("No overrepresented sequences plot possible"),file=paste(pdf_directory,paste(bfx_id,"overrepresented_sequences.pdf",sep="_"),sep="/"))
 }
-
 
 # adapter content
 if("adapter_content" %in% names(fastqc_result)){
-	adapter_content_m = tidyr::gather(fastqc_result$adapter_content,Adapter,Content,-c(Position,Library,Read,Library_read))
-	x_axis_breaks = levels(fastqc_result$adapter_content$Position)
-	x_axis_labels = sapply(1:length(x_axis_breaks),function(x){ifelse(x%%5==1,x_axis_breaks[x],"")})
+	adapter_content_m = gather(fastqc_result$adapter_content,Adapter,Content,-c(Position,Library,Read,Library_read))
 	if(!too_many_datasets){
 		plot_size = calc_facet_plot_size(length(unique(adapter_content_m$Library_read)))
 		adapter_content_plot = ggplot(adapter_content_m,aes(x=Position,y=Content,colour=Adapter)) +
 		geom_line() +
 		theme_bw(12) +
-		scale_x_discrete("Position in read (bp)",limits=x_axis_breaks,breaks=x_axis_breaks,labels=x_axis_labels) +
+		scale_x_discrete("Position in read") +
 		scale_y_continuous("Percentage of reads") +
 		scale_colour_manual("Adapter",values=color_brewer_qual_palette) +
 		facet_wrap(~Library_read,ncol=plot_size$num_columns) +
-		theme(legend.position="bottom",axis.text.x=element_text(angle=45,vjust=1,hjust=1)) +
+		theme(legend.position="bottom") +
 		ggtitle("Adapter content")
 	} else {
 		num_plots = unique(length(adapter_content_m$Adapter))*unique(length(adapter_content_m$Read))
@@ -641,11 +599,11 @@ if("adapter_content" %in% names(fastqc_result)){
 		adapter_content_plot = ggplot(adapter_content_m,aes(x=Position,y=Content,fill=Adapter,group=Position)) +
 		geom_boxplot() +
 		theme_bw(12) +
-		scale_x_discrete("Position in read (bp)",limits=x_axis_breaks,breaks=x_axis_breaks,labels=x_axis_labels) +
+		scale_x_discrete("Position in read") +
 		scale_y_continuous("Percentage of reads") +
 		scale_fill_manual("Adapter",values=color_brewer_qual_palette) +
 		facet_grid(Adapter~Read) +
-		theme(legend.position="none",axis.text.x=element_text(angle=45,vjust=1,hjust=1)) +
+		theme(legend.position="none") +
 		ggtitle("Adapter content")
 	}
 	ggsave(paste(pdf_directory,paste(bfx_id,"adapter_content.pdf",sep="_"),sep="/"),plot=adapter_content_plot,width=plot_size$width,height=plot_size$height)
@@ -683,28 +641,23 @@ if("adapter_content" %in% names(fastqc_result)){
 	}
 	ggsave(paste(pdf_directory,paste(bfx_id,"total_adapter_content.pdf",sep="_"),sep="/"),plot=adapter_content_plot,width=plot_size$width,height=plot_size$height)
 	write.table(spread(adapter_content_total[,-3],Adapter,Content,fill=0),paste(data_directory,paste(bfx_id,"total_adapter_content.csv",sep="_"),sep="/"),col.names=T,row.names=F,sep="\t",quote=F)
-}else{
-	file.create(paste(data_directory,paste(bfx_id,"adapter_content.csv",sep="_"),sep="/"))
-	ggsave(grid.text("No total adapter content plot possible"),file=paste(pdf_directory,paste(bfx_id,"total_adapter_content.pdf",sep="_"),sep="/"))
-	file.create(paste(data_directory,paste(bfx_id,"total_adapter_content.csv",sep="_"),sep="/"))
-	ggsave(grid.text("No adapter content plot possible"),file=paste(pdf_directory,paste(bfx_id,"adapter_content.pdf",sep="_"),sep="/"))
 }
 
 # k-mer content  - select only one kmer per position
-if("kmer_content" %in% names(fastqc_result) && length(fastqc_result$kmer_content$Max.Obs.Exp.Position)>0){
+if("kmer_content" %in% names(fastqc_result)){
 	kmer_content_plot_data = fastqc_result$kmer_content %>% group_by(Library,Read,Library_read,Max.Obs.Exp.Position) %>% mutate(Rank = rank(-Obs.Exp.Max)) %>% filter(Rank==1) %>%
 	group_by(Library,Read,Library_read) %>% mutate(Plot_row=rank(Max.Obs.Exp.Position)) %>% as.data.frame()
 	kmer_content_plot_data$Sequence = factor(kmer_content_plot_data$Sequence)
-	x_axis_breaks = levels(fastqc_result$kmer_content$Max.Obs.Exp.Position)
-	x_axis_labels = x_axis_breaks	
-	#x_axis_labels = sapply(1:length(x_axis_breaks),function(x){ifelse(x%%5==1,x_axis_breaks[x],"")})
+	
 	if(!too_many_datasets){
 		plot_size = calc_facet_plot_size(length(unique(kmer_content_plot_data$Library_read)))
+		max_base = max(kmer_content_plot_data$Max.Obs.Exp.Position)
+		max_base = max_base+0.3*max_base
 		kmer_content_plot = ggplot(kmer_content_plot_data,aes(y=Plot_row,x=Max.Obs.Exp.Position,colour=Sequence,label=Sequence)) + 
 		geom_text(hjust=0,family="mono") + 
-		scale_x_discrete("Position in read (bp)",limits=x_axis_breaks,breaks=x_axis_breaks,labels=x_axis_labels) +
+		scale_x_discrete("Position in read") +
 		facet_wrap(~Library_read,scales="free",ncol=plot_size$num_columns) +
-		theme(legend.position="none",axis.ticks.y=element_blank(),axis.text.y=element_blank(),axis.title.y=element_blank(),axis.text.x=element_text(angle=45,vjust=1,hjust=1)) +
+		theme(legend.position="none",axis.ticks.y=element_blank(),axis.text.y=element_blank(),axis.title.y=element_blank()) +
 		ggtitle("K-mer content")
 
 	} else {
@@ -713,21 +666,19 @@ if("kmer_content" %in% names(fastqc_result) && length(fastqc_result$kmer_content
 		num_plots = length(unique(kmer_content_plot_data_summarised$Read))
 		plot_size = list(num_columns = num_plots,num_rows=1,height=8,width=ifelse(num_plots==1,8,12))
 
+		max_base = max(kmer_content_plot_data_summarised$Max.Obs.Exp.Position)
 	  	kmer_content_plot = ggplot(subset(kmer_content_plot_data_summarised,Freq>0),aes(x=Max.Obs.Exp.Position,y=Freq,fill=Sequence,label=Sequence)) +
 		geom_bar(stat="identity",position="stack",colour="black") +
 		geom_text(position="stack",hjust=1,family="mono",angle=90,fontface="bold") +
-		scale_x_discrete("Position in read (bp)",limits=x_axis_breaks,breaks=x_axis_breaks,labels=x_axis_labels) +
+		scale_x_discrete("Position in read") +
 		scale_y_continuous("Number of data sets") +
 		facet_wrap(~Read,scales="free",ncol=plot_size$num_columns) +
-		theme(legend.position="none",axis.text.x=element_text(angle=45,vjust=1,hjust=1)) +
+		theme(legend.position="none") +
 		ggtitle("K-mer content")
 	 }
 
 	ggsave(paste(pdf_directory,paste(bfx_id,"kmer_content.pdf",sep="_"),sep="/"),plot=kmer_content_plot,width=plot_size$width,height=plot_size$height)
 	write.table(fastqc_result$kmer_content[,-3],paste(data_directory,paste(bfx_id,"kmer_content.csv",sep="_"),sep="/"),col.names=T,row.names=F,sep="\t",quote=F)
-}else{
-	file.create(paste(data_directory,paste(bfx_id,"kmer_content.csv",sep="_"),sep="/"))
-	ggsave(grid.text("No kmer content plot possible"),file=paste(pdf_directory,paste(bfx_id,"kmer_content.pdf",sep="_"),sep="/"))
 }
 
 

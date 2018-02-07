@@ -170,7 +170,7 @@ unless(`which unbuffer`=~/^which: no unbuffer/){
 	$cmd = "unbuffer $cmd";
 }
 
-$cmd = "module load apps/snakemake || true;".$cmd;
+$cmd = "module load apps/snakemake;".$cmd;
 
 $cmd .= " --snakefile $snakefile";
 $cmd .= " --configfile $configfile" if($configfile);
@@ -200,7 +200,7 @@ if($host=~/^login-0-0/){
 
 	# pass remaining cluster configuration
 	if($cluster_configfile){
-		$cmd .= " -S {cluster.shell} -q {cluster.queue} -l h_rt={cluster.runtime} -l mem_free={cluster.memory} -l {cluster.other_resources} -pe smp {cluster.cpu} \" --cluster-config $cluster_configfile";
+		$cmd .= " -S {cluster.shell} -q ngs.q -l h_rt={cluster.runtime} -l mem_free={cluster.memory} -l {cluster.other_resources} -pe smp {cluster.cpu} \" --cluster-config $cluster_configfile";
 	}else{
 		$cmd .= "\"";
 	}
@@ -208,17 +208,11 @@ if($host=~/^login-0-0/){
 	# pass custom job script
 	if($jobscript){
 		$cmd .= " --jobscript $jobscript";
-	}
-	
+	}	
 }
 
 # number of jobs
 $cmd .= " --jobs $jobs";
-
-# if we run jobs on a submit node then use at most 1 core in parallel; usually these jobs are either: 
-#   a) light-weight and do not take much time (then it does not matter) or 
-#   b) control SGE pipelines themself (then we do not want to run multiple in parallel
-$cmd .= " --local-cores 1 ";
 
 # add additional settings for snakemake
 $cmd .= " $snakemake_params";

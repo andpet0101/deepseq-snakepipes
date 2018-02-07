@@ -37,7 +37,7 @@
 # single-read dual-index run and the other is for lane 5-8 and it's a single-read single-index run where the second
 # index is not demultiplexed.
 samplesheethome: /group/sequencing/Samples_Material/FCpipelining/NextSeq/170116_NS500762_0031_AHLGF3BGXY
-bcl2fastqversion: 2.19.1
+bcl2fastqversion: 2.17.1.14
 bcl:
   FC031-HLGF3BGXY:
     mismatches: 1

@@ -1,242 +1,216 @@
-try:
-	GENERAL_SETTINGS_INCLUDED
-except NameError: 
-	include: "general_settings.snakemake"
+# Workflow file do_mapping.snakemake
+# ==================================
 
-####################
-# Config/Parameter #
-####################
+include: 'configuration/general.snakemake'
+include: 'configuration/input.snakemake'
+include: 'configuration/reference.snakemake'
 
-# info about reference needed
+##########
+# Config #
+##########
+
+# snakemake_config.yml configuration lines (copy-and-paste and uncomment once)
+#
+#############
+### mapping #
+#############
+##
+### Mapping can be done with bwa, bwaaln, bwasw, bowtie1, bowtie2, gsnap, STAR. If preprocessing (remove adapter, process barcodes, etc.) has to be done before mapping 
+### the files in the preprocessing directory will be used as input otherwise the files from the fastq directory. If the output of preprocessing is a BAM file with unaligned reads
+### with additional tags/barcodes per read, then unaligned and aligned BAM file will be merged thus preserving the tags/barcodes. 
+### 
+##mapping:
+##  program: bwa
+### index: reference.version
+### index_directory: /projects/seq-work/user/pipeline/bwa/
+### binary: bwa
+### extra:
+### extra_aln:
+### extra_samspe:
+### tmp_dir: /tmp
+### sort_by: coordinate
+##
+
 if not REFERENCE_CFG:
-	raise WorkflowError("Please provide a reference configuration!")
+	raise WorkflowError('Please provide a reference configuration!')
 
-# info about aligner and libcomplexity is needed
-if not ALIGNER_CFG:
-	raise WorkflowError("Please provide an aligner configuration!")
-if not LIBCOMPLEXITY_CFG:
-	raise WorkflowError("Please provide a libcomplexity configuration!")
+MAPPING_CFG = config.get('mapping',dict())
+if not MAPPING_CFG:
+	raise WorkflowError('Please provide an aligner configuration!')
+if "program" not in MAPPING_CFG:
+	MAPPING_CFG["program"] = "gsnap"
 
-BEDTOOLS_STRAND_PARAM = "" if STRAND==0 else "-s" if STRAND==1 else "-S"
-EXON_EXON_GTF_PARAM = LIBCOMPLEXITY_CFG["exon_exon_gtf"] if "exon_exon_gtf" in LIBCOMPLEXITY_CFG else ""
-CALC_GENE_COMPLEXITY = LIBCOMPLEXITY_CFG["calc_gene_complexity"]
 
-###########
-# Targets #
-###########
 
-# produce bam and bai files
-BAM_FILES = [ALIGNER_CFG["program"] + "/" + s + ".bam" for s in LIBRARIES]
-BAI_FILES = [ALIGNER_CFG["program"] + "/" + s + ".bai" for s in LIBRARIES]
 
-# produce mapping stats files
-MAPPING_STATS_FILES = []
-for s in LIBRARIES:
-	MAPPING_STATS_FILES.append(ALIGNER_CFG["program"] + "/report/data/" + PROJECT + "_" + s + "_alignment_stats.csv")
-	MAPPING_STATS_FILES.append(ALIGNER_CFG["program"] + "/report/data/" + PROJECT + "_" + s + "_alignment_complexity.csv")
+MAPPING_CFG["program"] = "gsnap"
 
-# produce mapping stats plots
-MAPPING_PLOTS_FILES = []
-for s in ["subsample_number_1","complete_number_1","subsample_percent_1","complete_percent_1"]:
-	file_base = PROJECT + ".alignmentcomplexity_" + s + "." + ("Complete_Gene" if LIBCOMPLEXITY_CFG["calc_gene_complexity"] else "Complete") + "." + ALIGNER_CFG["program"]
-	MAPPING_PLOTS_FILES.append(ALIGNER_CFG["program"] + "/report/pdf/" + file_base + ".pdf")
-	MAPPING_PLOTS_FILES.append(ALIGNER_CFG["program"] + "/report/picture/" + file_base + ".png")
 
-MAPPING_TARGETS = [BAM_FILES,BAI_FILES,MAPPING_PLOTS_FILES]
+PROGRAM_CFG = dict()
+PREPROCESSING_CFG = dict()
+#PREPROCESSING_CFG = {'preprocessed_bams' : 1}
 
+# function to define which input to use
+def get_mapping_input_files(basename,preprocessing_cfg):
+	if preprocessing_cfg:
+		if 'preprocessed_bams' in preprocessing_cfg:
+			return 'preprocessing/'+basename+'.unaligned.bam'
+		else:
+			return ['preprocessing/'+f for f in LIBRARIES[basename]['fastq']]
+	else:
+		return ['fastq/'+f for f in LIBRARIES[basename]['fastq']]
 
 #########
 # Rules #
 #########
 
-shell.prefix("set -euf -o pipefail;")
+shell.prefix('set -euf -o pipefail;')
 
-# paired mapping supercedes single mapping
-ruleorder: run_gsnap_paired > run_gsnap_single
-ruleorder: run_bwa_paired > run_bwa_single
 
 rule do_mapping:
 	input:
-		MAPPING_TARGETS
-
-rule make_mapping_plots:
-	input:
-		MAPPING_STATS_FILES
+		[MAPPING_CFG['program']+'/'+l+'.bam' for l in LIBRARIES.keys()],
+		[MAPPING_CFG['program']+'/'+l+'.bai' for l in LIBRARIES.keys()]
 	output:
-		MAPPING_PLOTS_FILES
+		MAPPING_CFG['program']+'/'+'mapping.done'
+
+rule run_samtools_index:
+	input:
+		'{program}/{basename}.bam'
+	output:
+		'{program}/{basename}.bai'
 	log:
-		ALIGNER_CFG["program"] + "/log/figures_mappingstatistics.log"
+		'{program}/log/{basename}.bai.log'
 	params:
-		lib_display="-d "+LIBCOMPLEXITY_CFG["lib_display"] if "lib_display" in LIBCOMPLEXITY_CFG else ""
-	shell:
-		"\n\t\t("+module_load("python","R")+
-		"""
-		touch {MAPPING_PLOTS_FILES}
-		figures_mappingstatistics.py -i {ALIGNER_CFG[program]}/report/data -r {ALIGNER_CFG[program]}/report -s """ + ("Complete Gene" if CALC_GENE_COMPLEXITY==1 else "Complete")  + """ -b {PROJECT} {params.lib_display}) >& {log}
-		"""
+		modules=PROGRAM_CFG
+	wrapper:
+		'wrappers/samtools/index'
+	
 
-if CALC_GENE_COMPLEXITY==1:
-	rule calculate_mapping_stats:
-		input:
-			bam=ALIGNER_CFG["program"] + "/{basename}.bam"
-		output:
-			stats=ALIGNER_CFG["program"] + "/report/data/" + PROJECT + "_{basename}_alignment_stats.csv",
-			complexity=ALIGNER_CFG["program"] + "/report/data/" + PROJECT + "_{basename}_alignment_complexity.csv"
-		log:
-			ALIGNER_CFG["program"] + "/log/" + PROJECT + ".{basename}.calculate_mapping_stats.log"
-		shell:
-			"\n\t\t("+module_load("python","bedtools","samtools")+
-			"""
-			samtools view -F 0x100 -b {input.bam} | calculate_mappingstatistics.py -b {PROJECT} -f -m -l -o {ALIGNER_CFG[program]}/report -s Complete -i {LIBCOMPLEXITY_CFG[subsample_size]}
-			samtools view -F 0x100 -b {input.bam} | bedtools intersect {BEDTOOLS_STRAND_PARAM} -nonamecheck -u -f 0.5 -split -a stdin -b {EXON_EXON_GTF_PARAM} | calculate_mappingstatistics.py -b {PROJECT} -f -l -o {ALIGNER_CFG[program]}/report -s Gene -i {LIBCOMPLEXITY_CFG[subsample_size]}) &> {log}
-			"""
-else:
-	rule calculate_mapping_stats:
-		input:
-			bam=ALIGNER_CFG["program"] + "/{basename}.bam"
-		output:
-			stats=ALIGNER_CFG["program"] + "/report/data/" + PROJECT + "_{basename}_alignment_stats.csv",
-			complexity=ALIGNER_CFG["program"] + "/report/data/" + PROJECT + "_{basename}_alignment_complexity.csv"
-		log:
-			ALIGNER_CFG["program"] + "/log/" + PROJECT + ".{basename}.calculate_mapping_stats.log"
-		shell:
-			"\n\t\t("+module_load("python","bedtools","samtools")+
-			"""
-			samtools view -F 0x100 -b {input.bam} | calculate_mappingstatistics.py -b {PROJECT} -f -m -l -o {ALIGNER_CFG[program]}/report -s Complete -i {LIBCOMPLEXITY_CFG[subsample_size]}) >& {log}
-			"""
-
-
-rule index_bam:
+rule run_bwa_mem:
 	input:
-		ALIGNER_CFG["program"] + "/{basename}.bam"
+		lambda wildcards: get_mapping_input_files(wildcards.basename,PREPROCESSING_CFG)
 	output:
-		ALIGNER_CFG["program"] + "/{basename}.bai"
+		bam='bwa/{basename}.bam'
 	log:
-		ALIGNER_CFG["program"] + "/log/{basename}.bai.log"
-	shell:
-		"\n\t\t("+module_load("samtools")+
-		"""
-		samtools index {input} {output}) >& {log}
-		"""	
+		'bwa/log/{basename}.log'
+	threads: 
+		8
+	params:
+                readgroup=lambda wildcards: LIBRARIES[wildcards.basename]['readgroup'],
+		library=lambda wildcards: LIBRARIES[wildcards.basename]['library'],
+		sample=lambda wildcards: LIBRARIES[wildcards.basename]['sample'],
+		paired_end=lambda wildcards: LIBRARIES[wildcards.basename]['paired-end'],
+		index=MAPPING_CFG['index'] if 'index' in MAPPING_CFG else REFERENCE_CFG['version'],
+		index_directory=MAPPING_CFG['index_directory'] if 'index_directory' in MAPPING_CFG else '/projects/seq-work/user/pipeline/bwa/',
+		binary=MAPPING_CFG['binary'] if 'binary' in MAPPING_CFG else 'bwa',
+		extra=MAPPING_CFG['extra'] if 'extra' in MAPPING_CFG else '-M',
+		reference=REFERENCE_CFG['path']+'.fa',
+		tmp_dir=MAPPING_CFG['tmp_dir'] if 'tmp_dir' in MAPPING_CFG else TMP_DIR,
+		sort_by=MAPPING_CFG['sort_by'] if 'sort_by' in MAPPING_CFG else 'coordinate',
+		modules=PROGRAM_CFG
+	wrapper:
+		'wrappers/bwa/mem'
 
-# BWA #####
-
-rule run_bwa_single:
+rule run_bwa_aln:
 	input:
-		"fastq/{basename}_R1.clean.fastq.gz" if CLEAN_DATA_CFG else "fastq/{basename}_R1.fastq.gz"
+		lambda wildcards: get_mapping_input_files(wildcards.basename,PREPROCESSING_CFG)
 	output:
-		bam="bwa/{basename}.bam"
+		bam='bwaaln/{basename}.bam'
 	log:
-		"bwa/log/{basename}.log"
+		'bwaaln/log/{basename}.log'
 	threads:
 		8
-	shell:
-		"\n\t\t("+module_load("bwa","samtools")+
-		"""
-		RG="{wildcards.basename}";LB="{wildcards.basename}";SM="{wildcards.basename}"
-		if [[ "{wildcards.basename}" =~ ^(L[0-9]+)_(.+) ]];then LB="${{BASH_REMATCH[1]}}";SM="${{BASH_REMATCH[2]}}";fi
-		{ALIGNER_CFG[binary]} mem -R '@RG\\tID:'$RG'\\tSM:'$SM'\\tLB:'$LB'\\tPL:ILLUMINA' -t `expr ${{NSLOTS:-{threads}}} - 2` {ALIGNER_CFG[parameter]} {ALIGNER_CFG[index_directory]}/{ALIGNER_CFG[index]} {input} | \
-		samtools sort -O bam -T {TMP_DIR}/{wildcards.basename} -o {output} -@ 2 -) >& {log}
-		"""
+	params:
+                readgroup=lambda wildcards: LIBRARIES[wildcards.basename]['readgroup'],
+		library=lambda wildcards: LIBRARIES[wildcards.basename]['library'],
+		sample=lambda wildcards: LIBRARIES[wildcards.basename]['sample'],
+		paired_end=lambda wildcards: LIBRARIES[wildcards.basename]['paired-end'],
+		index=MAPPING_CFG['index'] if 'index' in MAPPING_CFG else REFERENCE_CFG['version'],
+		index_directory=MAPPING_CFG['index_directory'] if 'index_directory' in MAPPING_CFG else '/projects/seq-work/user/pipeline/bwa/',
+		binary=MAPPING_CFG['binary'] if 'binary' in MAPPING_CFG else 'bwa',
+		extra_aln=MAPPING_CFG['extra_aln'] if 'extra_aln' in MAPPING_CFG else '',
+		extra_samspe=MAPPING_CFG['extra_samspe'] if 'extra_samspe' in MAPPING_CFG else '',
+		reference=REFERENCE_CFG['path']+'.fa',
+		tmp_dir=MAPPING_CFG['tmp_dir'] if 'tmp_dir' in MAPPING_CFG else TMP_DIR,
+		sort_by=MAPPING_CFG['sort_by'] if 'sort_by' in MAPPING_CFG else 'coordinate',
+		modules=PROGRAM_CFG
+		
+	wrapper:
+		'wrappers/bwa/aln'
 
-rule run_bwa_paired:
+rule run_bwa_sw:
 	input:
-		fq1="fastq/{basename}_R1.clean.fastq.gz" if CLEAN_DATA_CFG else "fastq/{basename}_R1.fastq.gz",
-		fq2="fastq/{basename}_R2.clean.fastq.gz" if CLEAN_DATA_CFG else "fastq/{basename}_R2.fastq.gz"
+		lambda wildcards: get_mapping_input_files(wildcards.basename,PREPROCESSING_CFG)
 	output:
-		bam="bwa/{basename}.bam"
+		bam='bwasw/{basename}.bam'
 	log:
-		"bwa/log/{basename}.log"
+		'bwasw/log/{basename}.log'
 	threads:
 		8
-	shell:
-		"\n\t\t("+module_load("bwa","samtools")+
-		"""
-		RG="{wildcards.basename}";LB="{wildcards.basename}";SM="{wildcards.basename}"
-		if [[ "{wildcards.basename}" =~ ^(L[0-9]+)_(.+) ]];then LB="${{BASH_REMATCH[1]}}";SM="${{BASH_REMATCH[2]}}";fi
-		{ALIGNER_CFG[binary]} mem -R '@RG\\tID:'$RG'\\tSM:'$SM'\\tLB:'$LB'\\tPL:ILLUMINA' -t `expr ${{NSLOTS:-{threads}}} - 2` {ALIGNER_CFG[parameter]} {ALIGNER_CFG[index_directory]}/{ALIGNER_CFG[index]} {input.fq1} {input.fq2} | \
-		samtools sort -O bam -T {TMP_DIR}/{wildcards.basename} -o {output} -@ 2 -) >& {log}
-		"""
+	params:
+                readgroup=lambda wildcards: LIBRARIES[wildcards.basename]['readgroup'],
+		library=lambda wildcards: LIBRARIES[wildcards.basename]['library'],
+		sample=lambda wildcards: LIBRARIES[wildcards.basename]['sample'],
+		paired_end=lambda wildcards: LIBRARIES[wildcards.basename]['paired-end'],
+		index=MAPPING_CFG['index'] if 'index' in MAPPING_CFG else REFERENCE_CFG['version'],
+		index_directory=MAPPING_CFG['index_directory'] if 'index_directory' in MAPPING_CFG else '/projects/seq-work/user/pipeline/bwa/',
+		binary=MAPPING_CFG['binary'] if 'binary' in MAPPING_CFG else 'bwa',
+		extra=MAPPING_CFG['extra'] if 'extra' in MAPPING_CFG else '',
+		reference=REFERENCE_CFG['path']+'.fa',
+		tmp_dir=MAPPING_CFG['tmp_dir'] if 'tmp_dir' in MAPPING_CFG else TMP_DIR,
+		sort_by=MAPPING_CFG['sort_by'] if 'sort_by' in MAPPING_CFG else 'coordinate',
+		modules=PROGRAM_CFG
+	wrapper:
+		'wrappers/bwa/bwasw'
 
-# bowtie1 #####
-
-rule run_bowtie1_single:
+rule run_bowtie1:
 	input:
-		"fastq/{basename}_R1.clean.fastq.gz" if CLEAN_DATA_CFG else "fastq/{basename}_R1.fastq.gz"
+		lambda wildcards: get_mapping_input_files(wildcards.basename,PREPROCESSING_CFG)
 	output:
-		bam="bowtie1/{basename}.bam"
+		bam='bowtie1/{basename}.bam'
 	log:
-		"bwa/log/{basename}.log"
+		'bowtie1/log/{basename}.log'
 	threads:
 		8
-	shell:
-		"\n\t\t("+module_load("bowtie1","samtools")+
-		"""
-		RG="{wildcards.basename}";LB="{wildcards.basename}";SM="{wildcards.basename}"
-		if [[ "{wildcards.basename}" =~ ^(L[0-9]+)_(.+) ]];then LB="${{BASH_REMATCH[1]}}";SM="${{BASH_REMATCH[2]}}";fi
-		gunzip -cd {input} | {ALIGNER_CFG[binary]} -S --sam-RG ID:$RG --sam-RG LB:$LB --sam-RG SM:$SM -p `expr ${{NSLOTS:-{threads}}} - 2` {ALIGNER_CFG[parameter]} {ALIGNER_CFG[index_directory]}/{ALIGNER_CFG[index]} - | \
-		samtools sort -O bam -T ${{TMPDIR:-.}}/{wildcards.basename} -o {output.bam} -@ 2 -) >& {log}
-		"""
+	params:
+	params:
+                readgroup=lambda wildcards: LIBRARIES[wildcards.basename]['readgroup'],
+		library=lambda wildcards: LIBRARIES[wildcards.basename]['library'],
+		sample=lambda wildcards: LIBRARIES[wildcards.basename]['sample'],
+		index=MAPPING_CFG['index'] if 'index' in MAPPING_CFG else REFERENCE_CFG['version'],
+		index_directory=MAPPING_CFG['index_directory'] if 'index_directory' in MAPPING_CFG else '/projects/seq-work/user/pipeline/bowtie1/',
+		binary=MAPPING_CFG['binary'] if 'binary' in MAPPING_CFG else 'bowtie1',
+		extra=MAPPING_CFG['extra'] if 'extra' in MAPPING_CFG else '',
+		tmp_dir=MAPPING_CFG['tmp_dir'] if 'tmp_dir' in MAPPING_CFG else TMP_DIR,
+		sort_by=MAPPING_CFG['sort_by'] if 'sort_by' in MAPPING_CFG else 'coordinate',
+		modules=PROGRAM_CFG
+	wrapper:
+		'wrappers/bowtie1'
 
-rule run_bowtie1_paired:
+
+rule run_gsnap:
 	input:
-		fq1="fastq/{basename}_R1.clean.fastq.gz" if CLEAN_DATA_CFG else "fastq/{basename}_R1.fastq.gz",
-		fq2="fastq/{basename}_R2.clean.fastq.gz" if CLEAN_DATA_CFG else "fastq/{basename}_R2.fastq.gz"
-	output:
-		bam="bowtie1/{basename}.bam"
-	log:
-		"bwa/log/{basename}.log"
-	threads:
-		8
-	shell:
-		"\n\t\t("+module_load("bowtie1","samtools")+
-		"""
-		RG="{wildcards.basename}";LB="{wildcards.basename}";SM="{wildcards.basename}"
-		if [[ "{wildcards.basename}" =~ ^(L[0-9]+)_(.+) ]];then LB="${{BASH_REMATCH[1]}}";SM="${{BASH_REMATCH[2]}}";fi
-		{ALIGNER_CFG[binary]} -S --sam-RG ID:$RG --sam-RG LB:$LB --sam-RG SM:$SM -p `expr ${{NSLOTS:-{threads}}} - 2` {ALIGNER_CFG[parameter]} {ALIGNER_CFG[index_directory]}/{ALIGNER_CFG[index]} -1 <( zcat {input.fq1} ) -2 <( zcat {input.fq2} ) | \
-		samtools sort -O bam -T ${{TMPDIR:-.}}/{wildcards.basename} -o {output.bam} -@ 2 -) >& {log}
-		"""
-
-
-# gsnap #####
-
-rule run_gsnap_single:
-	input:
-		fq="fastq/{basename}_R1.clean.fastq.gz" if CLEAN_DATA_CFG else "fastq/{basename}_R1.fastq.gz"
+		lambda wildcards: get_mapping_input_files(wildcards.basename,PREPROCESSING_CFG)
 
 	output:
-		bam="gsnap/{basename}.bam"
+		bam='gsnap/{basename}.bam'
 	log:
-		"gsnap/log/{basename}.log"
+		'gsnap/log/{basename}.log'
 	threads:
 		8
-	shell:
-		"\n\t\t("+module_load("gmap","samtools")+
-		"""
-		RG="{wildcards.basename}";LB="{wildcards.basename}";SM="{wildcards.basename}"
-		if [[ "{wildcards.basename}" =~ ^(L[0-9]+)_(.+) ]];then LB="${{BASH_REMATCH[1]}}";SM="${{BASH_REMATCH[2]}}";fi
-		{ALIGNER_CFG[binary]} -D {ALIGNER_CFG[index_directory]} -d {ALIGNER_CFG[index]} --gunzip -A sam -t `expr ${{NSLOTS:-{threads}}} - 2` {ALIGNER_CFG[parameter]} --read-group-id=\"$RG\" --read-group-name=\"$SM\" --read-group-library=\"$LB\" --read-group-platform=illumina {input.fq} >  {TMP_DIR}/{wildcards.basename}.sam;
-		sam_sort -D {ALIGNER_CFG[index_directory]} -d {ALIGNER_CFG[index]} --sort2=orig --mark-first  {TMP_DIR}/{wildcards.basename}.sam | samtools view -bS - > {output.bam}) >& {log}
-		"""
+	params:
+                readgroup=lambda wildcards: LIBRARIES[wildcards.basename]['readgroup'],
+		library=lambda wildcards: LIBRARIES[wildcards.basename]['library'],
+		sample=lambda wildcards: LIBRARIES[wildcards.basename]['sample'],
+		index=MAPPING_CFG['index'] if 'index' in MAPPING_CFG else REFERENCE_CFG['version'],
+		index_directory=MAPPING_CFG['index_directory'] if 'index_directory' in MAPPING_CFG else '/projects/seq-work/user/pipeline/gmap/',
+		binary=MAPPING_CFG['binary'] if 'binary' in MAPPING_CFG else 'gsnap',
+		extra=MAPPING_CFG['extra'] if 'extra' in MAPPING_CFG else '',
+		tmp_dir=MAPPING_CFG['tmp_dir'] if 'tmp_dir' in MAPPING_CFG else TMP_DIR,
+		sort_by=MAPPING_CFG['sort_by'] if 'sort_by' in MAPPING_CFG else 'coordinate',
+		modules=PROGRAM_CFG
+	wrapper:
+		'wrappers/gsnap'
 
-rule run_gsnap_paired:
-	input:
-		fq1="fastq/{basename}_R1.clean.fastq.gz" if CLEAN_DATA_CFG else "fastq/{basename}_R1.fastq.gz",
-		fq2="fastq/{basename}_R2.clean.fastq.gz" if CLEAN_DATA_CFG else "fastq/{basename}_R2.fastq.gz",
-	output:
-		bam="gsnap/{basename}.bam"
-		# transloc="gsnap/{basename}.transloc.bam"
-	log:
-		"gsnap/log/{basename}.log"
-	threads:
-		8
-	shell:
-		"\n\t\t("+module_load("gmap","samtools")+
-		"""
-		RG="{wildcards.basename}";LB="{wildcards.basename}";SM="{wildcards.basename}"
-		if [[ "{wildcards.basename}" =~ ^(L[0-9]+)_(.+) ]];then LB="${{BASH_REMATCH[1]}}";SM="${{BASH_REMATCH[2]}}";fi
-		{ALIGNER_CFG[binary]} -D {ALIGNER_CFG[index_directory]} -d {ALIGNER_CFG[index]} --gunzip -A sam -t `expr ${{NSLOTS:-{threads}}} - 2` {ALIGNER_CFG[parameter]} --read-group-id=\"$RG\" --read-group-name=\"$SM\" --read-group-library=\"$LB\" --read-group-platform=illumina {input.fq1} {input.fq2} > {TMP_DIR}/{wildcards.basename}.sam;
-		sam_sort -D {ALIGNER_CFG[index_directory]} -d {ALIGNER_CFG[index]} --sort2=orig --mark-first  {TMP_DIR}/{wildcards.basename}.sam | samtools view -bS - > {output.bam}) >& {log}
-		"""
-
-		# sam_sort -D {ALIGNER_CFG[index_directory]} -d {ALIGNER_CFG[index]} --sort2=orig --mark-first {TMP_DIR}/{wildcards.basename}.sam | samtools view -bS - | java -jar /group/sequencing/Bfx/scripts/mathias/deep_seq_pipeline_java/jar/SplitGsnapTranslocation.jar I=/dev/stdin ON={output.bam} OT={output.transloc} SO=coordinate TMP_DIR={TMP_DIR}) >& {log}
+	
