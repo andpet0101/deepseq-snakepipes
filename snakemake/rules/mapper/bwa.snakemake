@@ -1,0 +1,219 @@
+
+# Rules file bwa.snakemake
+# ==================================
+
+# bwa/bwa-mem
+rule run_bwa_mem_single:
+	input:
+		fq='{directory}/{basename}_R1'+('.final' if PREPROCESSING else '')+'.fastq.gz'
+	output:
+		bam='bwa/{basename}.bam'
+	log:
+		'bwa/log/{basename}.log'
+	params:
+		binary=ALIGNER_CFG[binary],
+		parameter=ALIGNER_CFG[parameter] or "-M",
+		index=ALIGNER_CFG[index],
+		index_directory=ALIGNER_CFG[index_directory],
+		tmp_dir=TMP_DIR
+	threads:
+		8
+	shell:
+		"\n\t\t("+module_load("bwa","samtools")+
+		"""
+		RG="{wildcards.basename}";LB="{wildcards.basename}";SM="{wildcards.basename}"
+		if [[ "{wildcards.basename}" =~ ^(L[0-9]+)_(.+) ]];then LB="${{BASH_REMATCH[1]}}";SM="${{BASH_REMATCH[2]}}";fi
+		{params.binary} mem -t $(expr ${{NSLOTS:-{threads}}} - 2) -R '@RG\\tID:'$RG'\\tSM:'$SM'\\tLB:'$LB'\\tPL:ILLUMINA' {params.parameter} {params.index_directory}/{params.index} {input} | \
+		samtools sort -O bam -T {params.tmp_dir}/{wildcards.basename} -o {output} -@ 2 - > {output}) >& {log}
+		"""
+
+rule run_bwa_mem_paired:
+	input:
+		fq1='{directory}/{basename}_R1'+('.final' if PREPROCESSING else '')+'.fastq.gz',
+		fq2='{directory}/{basename}_R2'+('.final' if PREPROCESSING else '')+'.fastq.gz'
+	output:
+		bam='bwamem/{basename}.bam'
+	log:
+		'bwamem/log/{basename}.log'
+	params:
+		binary=ALIGNER_CFG[binary],
+		parameter=ALIGNER_CFG[parameter] or "-M",
+		index=ALIGNER_CFG[index],
+		index_directory=ALIGNER_CFG[index_directory],
+		tmp_dir=TMP_DIR
+	threads:
+		8
+	shell:
+		"\n\t\t("+module_load("bwa","samtools")+
+		"""
+		RG="{wildcards.basename}";LB="{wildcards.basename}";SM="{wildcards.basename}"
+		if [[ "{wildcards.basename}" =~ ^(L[0-9]+)_(.+) ]];then LB="${{BASH_REMATCH[1]}}";SM="${{BASH_REMATCH[2]}}";fi
+		{params.binary} mem -t $(expr ${{NSLOTS:-{threads}}} - 2) -R '@RG\\tID:'$RG'\\tSM:'$SM'\\tLB:'$LB'\\tPL:ILLUMINA' {params.parameter} {params.index_directory}/{params.index} {input} | \
+		samtools sort -O bam -T {params.tmp_dir}/{wildcards.basename} -o {output} -@ 2 - > {output}) >& {log}
+		"""
+
+rule run_bwa_mem_bam:
+	input:
+		ubam='{directory}/{basename}'+('.final' if PREPROCESSING else '')+'.bam'
+	output:
+		bam='bwamem/{basename}.bam'
+	log:
+		'bwamem/log/{basename}.log'
+	params:
+		binary=ALIGNER_CFG[binary],
+		parameter=ALIGNER_CFG[parameter] or "-M",
+		index=ALIGNER_CFG[index],
+		index_directory=ALIGNER_CFG[index_directory],
+		tmp_dir=TMP_DIR,
+		reference=REFERENCE_CFG
+	threads:
+		8
+	shell:
+		"\n\t\t("+module_load("bwa","samtools")+
+		"""
+		samtools fastq {input.ubam} | {params.binary} mem -t $(expr ${{NSLOTS:-{threads}}} - 2) {params.parameter} {params.interleave} {params.index_directory}/{params.index} > {params.tmp_dir}/{wildcards.basename}.bam) >& {log}
+		picardtools MergeBamAlignment UNMAPPED={input.ubam} ALIGNED={params.tmp_dir}/{wildcards.basename}.bam O={output} SO=coordinate R={params.reference} MAX_GAPS=-1 CLIP_ADAPTERS=false CLIP_OVERLAPPING_READS=false) >& {log}
+		"""
+
+# bwa-aln
+rule run_bwa_aln_single:
+	input:
+		fq='{directory}/{basename}_R1'+('.final' if PREPROCESSING else '')+'.fastq.gz'
+	output:
+		bam='bwaaln/{basename}.bam'
+	log:
+		'bwaaln/log/{basename}.log'
+	params:
+		binary=ALIGNER_CFG[binary],
+		parameter=ALIGNER_CFG[parameter],
+		index=ALIGNER_CFG[index],
+		index_directory=ALIGNER_CFG[index_directory],
+		tmp_dir=TMP_DIR
+	threads:
+		8
+	shell:
+		"\n\t\t("+module_load("bwa","samtools")+
+		"""
+		RG="{wildcards.basename}";LB="{wildcards.basename}";SM="{wildcards.basename}"
+		if [[ "{wildcards.basename}" =~ ^(L[0-9]+)_(.+) ]];then LB="${{BASH_REMATCH[1]}}";SM="${{BASH_REMATCH[2]}}";fi
+		{params.binary} aln -t $(expr ${{NSLOTS:-{threads}}} - 2) {params.parameter} {params.index_directory}/{params.index} {input} | {params.binary} samse -r '@RG\\tID:'$RG'\\tSM:'$SM'\\tLB:'$LB'\\tPL:ILLUMINA' {params.index_directory}/{params.index} - {input} | \
+		samtools sort -O bam -T {params.tmp_dir}/{wildcards.basename} -o {output} -@ 2 - > {output}) >& {log}
+		"""
+
+rule run_bwa_aln_paired:
+	input:
+		fq1='{directory}/{basename}_R1'+('.final' if PREPROCESSING else '')+'.fastq.gz',
+		fq2='{directory}/{basename}_R2'+('.final' if PREPROCESSING else '')+'.fastq.gz'
+	output:
+		bam='bwaaln/{basename}.bam'
+	log:
+		'bwaaln/log/{basename}.log'
+	params:
+		binary=ALIGNER_CFG[binary],
+		parameter=ALIGNER_CFG[parameter],
+		index=ALIGNER_CFG[index],
+		index_directory=ALIGNER_CFG[index_directory],
+		tmp_dir=TMP_DIR
+	threads:
+		8
+	shell:
+		"\n\t\t("+module_load("bwa","samtools")+
+		"""
+		RG="{wildcards.basename}";LB="{wildcards.basename}";SM="{wildcards.basename}"
+		if [[ "{wildcards.basename}" =~ ^(L[0-9]+)_(.+) ]];then LB="${{BASH_REMATCH[1]}}";SM="${{BASH_REMATCH[2]}}";fi	
+		{params.binary} sampe -r '@RG\\tID:'$RG'\\tSM:'$SM'\\tLB:'$LB'\\tPL:ILLUMINA' {params.index_directory}/{params.index} <({params.binary} aln -t $(expr ${{NSLOTS:-{threads}}} / 2) {params.parameter} {params.index_directory}/{params.index} {input.fq1}) <({params.binary} aln -t $(expr ${{NSLOTS:-{threads}}} / 2) {params.parameter} {params.index_directory}/{params.index} {input.fq2}) {input.fq1} {input.fq2} | \
+		samtools sort -O bam -T {params.tmp_dir}/{wildcards.basename} -o {output} -@ 2 - > {output}) >& {log}
+		"""
+
+rule run_bwa_aln_bam:
+	input:
+		ubam='{directory}/{basename}'+('.final' if PREPROCESSING else '')+'.bam'
+	output:
+		bam='bwaaln/{basename}.bam'
+	log:
+		'bwaaln/log/{basename}.log'
+	params:
+		binary=ALIGNER_CFG[binary],
+		parameter=ALIGNER_CFG[parameter],
+		index=ALIGNER_CFG[index],
+		index_directory=ALIGNER_CFG[index_directory],
+		tmp_dir=TMP_DIR,
+		paired_end=lambda wildcards: 1 if LIBRARIES[basename]['paired-end'] else 0
+	threads:
+		8
+	shell:
+		"\n\t\t("+module_load("bwa","samtools")+
+		"""
+		([ "{wildcards.paired_end}" == "True" ] && {params.binary} sampe {params.index_directory}/{params.index} <({params.binary} aln -t $(expr ${{NSLOTS:-{threads}}} / 2) {params.parameter} -b1 {params.index_directory}/{params.index} {input.ubam}) <({params.binary} aln -t $(expr ${{NSLOTS:-{threads}}} / 2) {params.parameter} -b2 {params.index_directory}/{params.index} {input.bam}) {input.ubam} > {params.tmp_dir}/{wildcards.basename}.bam;else {params.binary} samse {params.index_directory}/{params.index} <({params.binary} aln -t $(expr ${{NSLOTS:-{threads}}} / 2) {params.parameter} -b0 {params.index_directory}/{params.index} {input.ubam}) {input.ubam} > {params.tmp_dir}/{wildcards.basename}.bam;fi
+		picardtools MergeBamAlignment UNMAPPED={input.ubam} ALIGNED={params.tmp_dir}/{wildcards.basename}.bam O={output} SO=coordinate R={params.reference} MAX_GAPS=-1 CLIP_ADAPTERS=false CLIP_OVERLAPPING_READS=false) >& {log}
+		"""
+
+# bwasw
+rule run_bwasw_single:
+	input:
+		fq='{directory}/{basename}_R1'+('.final' if PREPROCESSING else '')+'.fastq.gz'
+	output:
+		bam='bwasw/{basename}.bam'
+	log:
+		'bwasw/log/{basename}.log'
+	params:
+		binary=ALIGNER_CFG[binary],
+		parameter=ALIGNER_CFG[parameter],
+		index=ALIGNER_CFG[index],
+		index_directory=ALIGNER_CFG[index_directory],
+		tmp_dir=TMP_DIR
+	threads:
+		8
+	shell:
+		"""
+		"\n\t\t("+module_load("bwa","samtools")+
+		"""
+		{params.binary} bwasw -t $(expr ${{NSLOTS:-{threads}}} - 2) {params.parameter} {params.index_directory}/{params.index}.fa {input.fq1} {input.fq2} | \
+		samtools sort -O bam -T {params.tmp_dir}/{wildcards.basename} -o {output} -@ 2 - > {output}) >& {log}
+		"""
+
+rule run_bwasw_paired:
+	input:
+		fq1='preprocessing/{basename}_R1.final.fastq.gz' if PREPROCESSING else 'fastq/{basename}_R1.fastq.gz',
+		fq2='preprocessing/{basename}_R2.final.fastq.gz' if PREPROCESSING else 'fastq/{basename}_R1.fastq.gz''
+	output:
+		bam='bwasw/{basename}.bam'
+	log:
+		'bwasw/log/{basename}.log'
+	params:
+		binary=ALIGNER_CFG[binary],
+		parameter=ALIGNER_CFG[parameter],
+		index=ALIGNER_CFG[index],
+		index_directory=ALIGNER_CFG[index_directory],
+		tmp_dir=TMP_DIR
+	threads:
+		8
+	shell:
+		"\n\t\t("+module_load("bwa","samtools")+
+		"""
+		{params.binary} bwasw -t $(expr ${{NSLOTS:-{threads}}} - 2) {params.parameter} {params.index_directory}/{params.index}.fa {input.fq1} {input.fq2} | \ 
+		samtools sort -O bam -T {params.tmp_dir}/{wildcards.basename} -o {output} -@ 2 - > {output}) >& {log}
+		"""
+
+rule run_bwasw_bam:
+	input:
+		ubam='preprocessing/{basename}'.final.bam' if PREPROCESSING else 'fastq/{basename}'.fastq.gz'
+	output:
+		bam='bwasw/{basename}.bam'
+	log:
+		'bwasw/log/{basename}.log'
+	params:
+		binary=ALIGNER_CFG[binary],
+		parameter=ALIGNER_CFG[parameter],
+		index=ALIGNER_CFG[index],
+		index_directory=ALIGNER_CFG[index_directory],
+		tmp_dir=TMP_DIR,
+		paired_end=LIBRARIES[basename]['paired-end']
+	threads:
+		8
+	shell:
+		"\n\t\t("+module_load("bwa","samtools")+
+		"""
+		if [[ "{wildcards.paired_end}" == "True" ]];then {params.binary} bwasw -t $(expr ${{NSLOTS:-{threads}}} - 2) {params.parameter} {params.index_directory}/{params.index}.fa <(samtools fastq -f 0x40 {input.bam}) <(samtools fastq -f 0x80 {input.bam};) > {output};else {params.binary} bwasw -t $(expr ${{NSLOTS:-{threads}}} - 2) {params.parameter} {params.index_directory}/{params.index} <(samtools fastq -f 0x40 {input.bam}) > {output};fi) >& log
+		"""
+

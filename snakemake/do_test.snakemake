@@ -1,0 +1,10 @@
+include: "configuration/general.snakemake"
+include: "configuration/input.snakemake"
+
+rule do_test:
+	output:
+		"test.txt"
+	shell:
+		"""
+		echo test > {output}
+		"""

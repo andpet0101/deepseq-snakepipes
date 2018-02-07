@@ -1,0 +1,99 @@
+# Configuration file general.snakemake
+# ==================================
+#
+# This configuration file should always be included FIRST. It manages:
+# - the import of commonly used python modules
+# - the import of the configuration file
+# - the configuration of project and species
+# - the temp directory
+# - adding paths of commonly used scripts to the PATH variable
+# - adding python library paths to the PYTHONPATH variable
+# - the configuration of user-defined program modules
+# - some minor functions and settings
+
+
+# snakemake_config.yml configuration lines (copy-and-paste and uncomment once)
+#
+#############
+### general #
+#############
+##
+### project bfx
+##project: bfx123
+### species: e.g. homo_sapiens, mus_musculus, danio_rerio, etc.
+##species: homo_sapiens
+### temp dir: default is SGE $TMPDIR if defined otherwise '.'
+###tmp_dir: /tmp
+##
+### program modules: default is using the current version of the program
+###program_modules:
+###  fastqc: 0.1.2
+###  gmap: 0.8.9
+##
+
+# ==================================
+
+# python modules ######
+import time
+import glob
+import os
+import re
+import csv
+
+
+# config file ######
+if os.path.exists("snakemake_config.yml"):
+  configfile: "snakemake_config.yml"
+elif os.path.exists("snakemake_config.json"):
+  configfile: "snakemake_config.json"
+else:
+  raise WorkflowError("Could not find the configuration file (snakemake_config.yml/snakemake_config.json) in this directory!")
+
+
+# project ######
+PROJECT =  config.get("project","")
+if not PROJECT:
+	raise WorkflowError("Please provide the configuration 'project'!")
+
+
+# species #####
+SPECIES = config.get("species","")
+if not SPECIES:
+	raise WorkflowError("Please provide the configuration 'species'!")
+
+
+# temp directory #####
+TMP_DIR = config.get("tmp_dir","")
+if not TMP_DIR:
+	TMP_DIR = "${TMPDIR:-.}"
+
+
+# PATH #####
+os.environ['PATH'] = os.path.dirname(os.path.abspath(workflow.snakefile)) + "/../scripts/:" + os.path.dirname(os.path.abspath(workflow.snakefile)) + "/../R/:/group/sequencing/Bfx/scripts/common/:" + os.environ['PATH']
+
+
+# PYTHONPATH #####
+os.environ['PYTHONPATH'] = "/group/sequencing/Bfx/scripts/mathias/dsp/dsp/src/:" + os.environ['PYTHONPATH']
+
+
+# PROGRAMS #####
+PROGRAM_CFG = config.get("programs",dict())
+
+
+# ==================================
+
+# function that loads specific versions of programs via the module system
+def module_load(*modules):
+  module_str = "module load"
+  for m in list(modules):
+    module_str += " apps/"+m
+    if m in program_cfg:
+      module_str += "/"+program_cfg[m]
+  module_str = module_str + ";module list -l"
+  return module_str
+
+# ==================================
+
+shell.prefix("set -euf -o pipefail -v;")
+
+

@@ -1,0 +1,122 @@
+# Configuration file input.snakemake
+# ==================================
+#
+# This configuration file defines the input. It should always be included SECOND. 
+# Only fastq files can be input. PLease take care that:
+# - fastq files have to follow latest FASTQ format and must be gzipped
+# - file names have to correspond to the following naming scheme: L|P<library>_<sample>_R<read>.fastq.gz where library is the library/pool id, 
+#   sample is a sample name and read is the direction 1,2,3 or 4
+# - dots are not allowed in the sample name as well as any special characters
+# - per library, only one fastq dataset is allowed (i.e. one _R1.fastq.gz file, etc) - multiple datasets (tracks) have to be merged
+# 
+# There are two ways of configuration:
+# a) automatic
+#   - no user interaction neccessary
+#   - a set of datasets is created by taking the basenames of all *fastq.gz files in the directory 'fastq' and removing the suffix _R[1234].fastq.gz
+#   - if _R2.fastq.gz files are present, then the data is paired-end otherwise single-end (exceptions: some protocols like InDropseq and C1)
+#   - mixing paired-end and single-end data is not allowed
+# b) manual
+#   - libraries and fastq files are defined by the user
+#   - mixing paired-end and single-end datasets is allowed but highly discouraged
+
+
+# snakemake_config.yml configuration lines (copy-and-paste and uncomment once)
+#
+########### 
+### input #
+###########
+##
+### Only fastq files can be input. They should follow latest FASTQ format and have to be gzipped. Per library, only one fastq dataset is allowed.
+### File names have to correspond to the following naming scheme: L|P<library>_<sample>_R<read>.fastq.gz where library is the library/pool id, sample 
+### is a sample name and read is the direction 1, 2, 3 or 4. Dots as well as any special characters are not allowed in the sample name! 
+###
+### The input can be configured automatically or manually.
+### - automatically: Datasets are created by taking the basenames of all *fastq.gz files in the directory 'fastq' and removing the suffix _R[1234].fastq.gz.
+###   If _R2.fastq.gz files are present, then the dataset is paired-end otherwise single-end (exceptions: some protocols like InDropseq and C1). Readgroup, library and
+###   sample information is parsed from the dataset name if possible otherwise default to the dataset name.
+### - manually: Datasets are defined by the user. Fastq files must be located in the directory 'fastq'. Readgroup, library and sample information can be explicitly
+###   specified otherwise will be parsed from the dataset name or default to the dataset name.
+###
+###input:
+###  L1111_SampleA:
+###    fastq:
+###      - L1111_SampleA_R1.fastq.gz
+###    readgroup: "my_readgroup"
+###    library: "my_library"
+###    sample: "my_sample"
+###  L2222_SampleB:
+###    fastq:
+###      - L1111_SampleB_R1.fastq.gz
+###      - L1111_SampleB_R2.fastq.gz
+##
+
+# ==================================
+
+INPUT_CFG = config.get('input',dict())
+LIBRARIES = dict()
+SAMPLES = dict()
+
+# manual configuration #####
+if INPUT_CFG:
+  for library in keys(INPUT_CFG):
+      LIBRARIES[library] = dict()
+      LIBRARIES[library]['fastq'] = set()
+      LIBRARIES[library]['paired-end'] = False
+      for fastq_file in INPUT_CFG[library]:
+        fastq_file = os.path.basename(fastq_file)
+        if not os.path.exists(os.path.realpath('fastq/'+fastq_file)):
+          raise WorkflowError("Configuration 'input': Could not find the fastq file '"+fastq_file+"' in the 'fastq' directory!")
+        if not re.search('\.fastq\.gz$',fastq_file):
+          raise WorkflowError("Configuration 'input': The name of the fastq file '"+fastq_file+"' has to end on '.fastq.gz' (it must be gzipped)!")    # file name not correct
+        fastq_basename = re.sub('\.fastq\.gz$','',fastq_file)
+        if re.search('\.',fastq_basename):
+          raise WorkflowError("Configuration 'input': The name of the fastq file '"+fastq_file+"' contains dots in the prefix which is not allowed!")    # dots in the prefix
+        name_match = re.match('^(\S+)_(R\d+)$',fastq_basename)
+        if not name_match:
+          raise WorkflowError("Configuration 'input': The name of the fastq file '"+fastq_file+"' does not fit the allowed naming scheme!")    # name does not fit pattern
+        read = name_match.group(2)
+        LIBRARIES[library]['fastq'].add(fastq_file)
+        if read=='R2':
+          LIBRARIES[library]['paired-end'] = True
+         
+# automatic configuration #####
+else:
+  for fastq_file in glob.glob('fastq/*.fastq.gz'):
+    fastq_file = os.path.basename(fastq_file)
+    if not os.path.exists(os.path.realpath('fastq/'+fastq_file)):
+      raise WorkflowError("Configuration 'input': Could not find the fastq file '"+fastq_file+"' in the 'fastq' directory!")
+    fastq_basename = re.sub('\.fastq\.gz$','',os.path.basename(fastq_file))
+    if re.search('\.',fastq_basename):
+      continue    # skip names with dots
+    name_match = re.match('^(\S+)_(R\d+)$',fastq_basename)
+    if name_match:
+      library = name_match.group(1)
+      read = name_match.group(2)
+    else:
+      continue    # name does not fit pattern
+    if library not in LIBRARIES:
+      LIBRARIES[library] = dict()
+      LIBRARIES[library]['fastq'] = set()
+      LIBRARIES[library]['paired-end'] = False
+    LIBRARIES[library]['fastq'].add(fastq_file)
+    if read=='R2':
+      LIBRARIES[library]['paired-end'] = True
+  for library in LIBRARIES.keys():
+    LIBRARIES[library]['fastq'] = sorted(LIBRARIES[library]['fastq'])
+
+# readgroup, library, sample: can be explicitly specified or is parsed from the name
+for library in LIBRARIES.keys():
+  rg = lm = sm = library
+  lib_sample_match_obj = re.match('^(L\d+)_(\S+)',library)
+  if lib_sample_match_obj:
+    lm = lib_sample_match_obj.group(1)
+    sm = lib_sample_match_obj.group(2)
+  if 'readgroup' not in LIBRARIES[library]:
+    LIBRARIES[library]['readgroup'] = rg
+  if 'library' not in LIBRARIES[library]:
+    LIBRARIES[library]['library'] = lm
+  if 'sample' not in LIBRARIES[library]:
+    LIBRARIES[library]['sample'] = sm
+
+# ==================================
+

@@ -1,0 +1,49 @@
+# Configuration file annotation.snakemake
+# ==================================
+#
+# This configuration file manages the configuration of the gene annotation.
+# - the gene annotation has to be in GTF format with the suffix '.gtf' AND in RefFlat format with the suffix '.refFlat'
+# - Command for generating refFlat: gtfToGenePred -genePredExt gtf stdout | awk 'BEGIN{FS=OFS="\t"}{print $12,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10}' > refFlat
+
+
+# snakemake_config.yml configuration lines (copy-and-paste and uncomment once)
+# 
+### annotation ###########
+###
+### The annotation can be configured (semi-)automatically or manually.
+### 
+### automatically: Given a species, an reference version and an Ensembl annotation version, snakemake will look for the annotation at 
+### /projects/seq-work/user/pipeline/annotation/<species>/<ref_version>/EnsemblGene-<ensembl_version>.<ref_version>.TR
+##annotation:
+##  version: 81
+##
+### manually: Provide full annotation paths for GTF (.gtf) and refFlat files (.refFlat) as well as a version (can be arbitrary).
+###annotation:
+###  gtf: /full/path/annotation.gtf
+###  refFlat: /full/path/annotation.refFlat
+###  version: some_annotation_name (without blanks)
+
+# ==================================
+
+ANNOTATION_CFG = config.get("annotation",dict())
+
+if 'gtf' in ANNOTATION_CFG and 'refFlat' in ANNOTATION_CFG:
+  if 'version' not in ANNOTATION_CFG:
+    raise WorkflowError("Configuration 'annotation': Please provide a version (can be arbitrary)!")
+elif 'version' in ANNOTATION_CFG:
+  try:
+    SPECIES
+    REFERENCE_CFG['version']
+  except NameError:
+    raise WorkflowError("Configuration 'annotation': For automatic configuration, the species (in configuration 'general') and the reference version is needed.")
+  ANNOTATION_CFG['gtf'] = "/projects/seq-work/user/pipeline/annotation/"+SPECIES+"/"+REFERENCE_CFG["version"]+"/EnsemblGene-"+ANNOTATION_CFG["version"]+"."+REFERENCE_CFG["version"]+".TR.gtf"
+  ANNOTATION_CFG['refFlat'] = "/projects/seq-work/user/pipeline/annotation/"+SPECIES+"/"+REFERENCE_CFG["version"]+"/EnsemblGene-"+ANNOTATION_CFG["version"]+"."+REFERENCE_CFG["version"]+".TR.refFlat"
+else:
+  raise WorkflowError("Configuration 'annotation': Need at least a 'version' of an installed annotation or both GTF ('gtf') and refFlat ('refFlat') files (plus arbitrary 'version')!")
+
+if not os.path.exists(ANNOTATION_CFG['gtf']):
+  raise WorkflowError("Configuration 'annotation': Could not find the annotation GTF file '"+ANNOTATION_CFG['gtf']+"'!")
+
+if not os.path.exists(ANNOTATION_CFG['refFlat']):
+  raise WorkflowError("Configuration 'annotation': Could not find the annotation refFlat file '"+ANNOTATION_CFG['refFlat']+"'!")
+

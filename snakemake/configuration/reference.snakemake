@@ -1,0 +1,47 @@
+# Configuration file reference.snakemake
+# ==================================
+#
+# This configuration file manages the configuration of the reference sequence.
+# - the reference sequence has to be in FASTA format with the suffix '.fa'
+# - an index has to be created with 'samtools faidx' with the suffix '.fa.fai'
+# - a sequence dictionary has to be created with picardtools with the suffix '.dict'
+# - a genome file has to be created from the first two columns of the index file (name and length); with the suffix '.genome' 
+
+# snakemake_config.yml configuration lines (copy-and-paste and uncomment once)
+#
+############### 
+### reference #
+###############
+##
+### The reference can be configured (semi-)automatically or manually.
+### 
+### automatically: Given a species and an assembly version, snakemake will look for the reference at /projects/seq-work/user/pipeline/reference/<species>/<version>/<version>.fa.
+##
+##reference:
+##  version: mm10
+##
+### manually: Provide a full reference path without the suffix '.fa' and a version (can be arbitrary). Index ('.fa.fai'), sequence dictionary ('.dict') and genome file ('.genome') must be present.
+###reference:
+###  path: /full/path/my_reference
+###  version: some_reference_name (without blanks)
+##
+
+# ==================================
+
+REFERENCE_CFG = config.get("reference",dict())
+
+if 'path' in REFERENCE_CFG:
+  if 'version' not in REFERENCE_CFG:
+    raise WorkflowError("Configuration 'reference': Please provide a version (can be arbitrary)!")
+else:
+  if 'version' not in REFERENCE_CFG:
+    raise WorkflowError("Configuration 'reference': Please provide a 'version' for automatic configuration!")
+  try:
+    SPECIES
+  except NameError:
+    raise WorkflowError("Configuration 'reference': For automatic configuration, the species must be provided (in configuration 'general').")
+  REFERENCE_CFG['path'] = '/projects/seq-work/user/pipeline/reference/'+SPECIES+'/'+REFERENCE_CFG['version']+'/'+REFERENCE_CFG['version']
+
+for suffix in ['fa','fa.fai','dict','genome']:
+  if not os.path.exists(REFERENCE_CFG['path']+"."+suffix):
+    raise WorkflowError("Configuration 'reference': Could not find the reference file "+REFERENCE_CFG["path"]+"."+suffix+"!")
