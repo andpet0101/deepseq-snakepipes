@@ -1,107 +1,130 @@
 try:
-	GENERAL_SETTINGS_INCLUDED
+  GENERAL_SETTINGS_INCLUDED
 except NameError: 
-	include: "general_settings_bcl2fastq.snakemake"
+  include: "general_settings_bcl2fastq.snakemake"
 
-PIPEIDS = bcl_cfg.keys()
-PIPETARGETS = [os.path.join(pipelining, longid, i, 'bcl2fastq.done')for i in PIPEIDS]
+#PIPEIDS = bcl_cfg.keys()
+FCID = [i for i in fcdict.keys()]
+PIPETARGETS, SEQDONE, CHANGEOWNER, TEMP, TEMP2 = [], [], [], [], []
+for fc in fcdict:
+  SEQDONE.append(os.path.join(fq_storage, fc, 'log/cp_sequencingstats.done'))
+  CHANGEOWNER.append(os.path.join(fq_storage, fc, 'log/change_owner.done'))
+  TEMP.append(os.path.join(fq_storage, fc, 'log/fastqc.done'))
+  TEMP2.append(os.path.join(fq_storage, fc, 'log/fq_into_db.done'))
+  for csv in fcdict[fc]['csvrun']:
+    PIPETARGETS.append(os.path.join(fcdict[fc]['pipeliningpath'], csv, 'bcl2fastq.done'))
 
 localrules: run_fqtransport, do_all
 
 shell.prefix("set -euf -o pipefail;")
 
 rule do_all:
-	input:
-		PIPETARGETS,
-		fq_storage+longid+'/log/cp_sequencingstats.done',
-		fq_storage+longid+'/log/change_owner.done'
+  input:
+    PIPETARGETS,
+    CHANGEOWNER,
+    SEQDONE
+  #shell:
+    #""""
+    #module load apps/python/2.7.8
+    #export PYTHONPATH=/group/sequencing/Bfx/scripts/common/dsp/dsp/src
+    #/group/sequencing/Bfx/scripts/common/doDemultiplex.py -m f
+    #"""
 
 rule run_bcl2fastq:
-	output:
-		done = pipelining+longid+'/{pipeid}/bcl2fastq.done'
-	log:
-		fq_storage+longid+'/stats/{pipeid}/nohup.out'
-	params:
-		csvpath = lambda wildcards: bcl_cfg[wildcards.pipeid]['csvpath'],
-		mismatchstring = lambda wildcards: bcl_cfg[wildcards.pipeid]['mismatches'],
-		additionalstring = lambda wildcards: bcl_cfg[wildcards.pipeid]['additional'],
-		basesmaskstring = lambda wildcards: bcl_cfg[wildcards.pipeid]['basesmask']
-	shell:
-		"""
-		module load apps/bcl2fastq/{bcl2fastqversion}
-		bcl2fastq -R {sequencing}{longid} --interop-dir {fq_storage}{longid}/stats/{wildcards.pipeid}/InterOp --sample-sheet {params.csvpath} -o {pipelining}{longid}/{wildcards.pipeid} --stats-dir {fq_storage}{longid}/stats/{wildcards.pipeid} --reports-dir {fq_storage}{longid}/stats/{wildcards.pipeid}/reports --barcode-mismatches {params.mismatchstring} {params.basesmaskstring} {params.additionalstring} >& {log}
-		touch {output.done}
-		"""
+  output:
+    done = pipeliningparent+'{fcid}/{csvid}/bcl2fastq.done'
+  log:
+    fq_storage+'{fcid}/stats/{csvid}/nohup.out'
+  params:
+    csvpath = lambda wildcards: fcdict[wildcards.fcid]['csvrun'][wildcards.csvid]['csvpath'],
+    mismatchstring = lambda wildcards: fcdict[wildcards.fcid]['csvrun'][wildcards.csvid]['mismatches'],
+    additionalstring = lambda wildcards: fcdict[wildcards.fcid]['csvrun'][wildcards.csvid]['additional'],
+    basesmaskstring = lambda wildcards: fcdict[wildcards.fcid]['csvrun'][wildcards.csvid]['basesmask'],
+    rawpath = lambda wildcards: fcdict[wildcards.fcid]['rawfolder'],
+    pipepath = lambda wildcards: fcdict[wildcards.fcid]['pipeliningpath']
+  shell:
+    """
+    module load apps/bcl2fastq/{bcl2fastqversion}
+    bcl2fastq -R {params.rawpath} --interop-dir {fq_storage}{wildcards.fcid}/stats/{wildcards.csvid}/InterOp --sample-sheet {params.csvpath} -o {params.pipepath}/ --stats-dir {fq_storage}{wildcards.fcid}/stats/{wildcards.csvid} --reports-dir {fq_storage}{wildcards.fcid}/stats/{wildcards.csvid}/reports --barcode-mismatches {params.mismatchstring} {params.basesmaskstring} {params.additionalstring} >& {log}
+    touch {output.done}
+    """
+
 
 rule run_fqtransport:
-	input:
-		PIPETARGETS
-	output:
-		done = fq_storage+longid+'/log/transport_fq.done'
-	shell:
-		"""
-		module load apps/python/2.7.8
-		export PYTHONPATH=/group/sequencing/Bfx/scripts/common/dsp/dsp/src
-		/group/sequencing/Bfx/scripts/common/transport_fqfiles.py -d {pipelining}{longid} -o {fq_storage}{longid} -q {transid}
-		while [ -n "$(qstat -j "{transid}" 2> /dev/null)" ] ; do sleep 5 ; done
-		touch {output.done}
-		"""
+  input:
+    lambda wildcards: expand(pipeliningparent+'{fcid}/{csvid}/bcl2fastq.done', fcid = wildcards.fcid, csvid = fcdict[wildcards.fcid]['csvrun'].keys())
+    #expand('pipeliningparent/{fcid}/*/bcl2fastq.done', fcid = FCID)
+    #dynamic(pipeliningparent+'{fcid}/{csvid}/bcl2fastq.done')
+  output:
+    done = fq_storage+'{fcid}/log/transport_fq.done'            # new 
+  params:
+    pipepath = lambda wildcards: fcdict[wildcards.fcid]['pipeliningpath']
+  shell:
+    """
+    module load apps/python/2.7.8
+    export PYTHONPATH=/group/sequencing/Bfx/scripts/common/dsp/dsp/src
+    /group/sequencing/Bfx/scripts/common/transport_fqfiles.py -d {params.pipepath} -o {fq_storage}{wildcards.fcid} -q "s"{wildcards.fcid}
+    while [ -n "$(qstat -j "s{wildcards.fcid}" 2> /dev/null)" ] ; do sleep 5 ; done
+    touch {output.done}
+    """
 
 rule run_fqintodatabase:
-	input:
-		fq_storage+longid+'/log/transport_fq.done'
-	output:
-		done = fq_storage+longid+'/log/fq_into_db.done'
-	shell:
-		"""
-		export PYTHONPATH=/group/sequencing/Bfx/scripts/common/dsp/dsp/src
-		module load apps/python/2.7.8
-		python /group/sequencing/Bfx/scripts/common/fastq_into_database.py -d {fq_storage}{longid} -s {bcl2fastqversion}
-		touch {output.done}
-		"""
+  input:
+    lambda wildcards: expand(fq_storage+'{fcid}/log/transport_fq.done', fcid = wildcards.fcid)
+  output:
+    done = fq_storage+'{fcid}/log/fq_into_db.done'
+  shell:
+    """
+    export PYTHONPATH=/group/sequencing/Bfx/scripts/common/dsp/dsp/src
+    module load apps/python/2.7.8
+    python /group/sequencing/Bfx/scripts/common/fastq_into_database.py -d {fq_storage}{wildcards.fcid} -s {bcl2fastqversion}
+    touch {output.done}
+    """
 
 rule run_fastqcdemultiplex:
-	input:
-		fq_storage+longid+'/log/transport_fq.done'
-	output:
-		done = fq_storage+longid+'/log/fastqc.done'
-	log:
-		fq_storage+longid+'/log/fastqc.log'
-	threads:
-		8
-	shell:
-		"""
-		module load apps/fastqc
-		mkdir -p {fq_storage}{longid}/fastqc
-		find {fq_storage}{longid} -type f -name "*fastq.gz" | xargs -L ${{NSLOTS:-{threads}}} fastqc -t ${{NSLOTS:-{threads}}} -a /group/sequencing/Bfx/scripts/common/dsp/dsp/files/fastqc_adapter.txt -o {fq_storage}{longid}/fastqc --nogroup >& {log}
-		touch {output.done}
-		"""
+  input:
+    lambda wildcards: expand(fq_storage+'{fcid}/log/transport_fq.done', fcid = wildcards.fcid)
+  output:
+    done = fq_storage+'{fcid}/log/fastqc.done'
+  log:
+    fq_storage+'{fcid}/log/fastqc.log'
+  threads:
+    8
+  shell:
+    """
+    module load apps/fastqc
+    mkdir -p {fq_storage}{wildcards.fcid}/fastqc
+    find {fq_storage}{wildcards.fcid} -type f -name "*fastq.gz" | xargs -L ${{NSLOTS:-{threads}}} fastqc -t ${{NSLOTS:-{threads}}} -a /group/sequencing/Bfx/scripts/common/dsp/dsp/files/fastqc_adapter.txt -o {fq_storage}{wildcards.fcid}/fastqc --nogroup >& {log}
+    touch {output.done}
+    """
 
 rule run_cpseqstats:
-	input:
-		PIPETARGETS
-	output:
-		done = fq_storage+longid+'/log/cp_sequencingstats.done'
-	log:
-		fq_storage+longid+'/log/cp_sequencingstats.log'
-	shell:
-		"""
-		export FQSTORAGE={fq_storage}
-		export RAWFOLDER={sequencing}
-		export STATFOLDER={sequencing}stats/
-		/group/sequencing/Bfx/scripts/common/cpSequencingStats.sh {longid} >& {log}
-		touch {output.done}
-		"""
+  input:
+    lambda wildcards: expand(pipeliningparent+'{fcid}/{csvid}/bcl2fastq.done', fcid = wildcards.fcid, csvid = fcdict[wildcards.fcid]['csvrun'].keys())
+  output:
+    done = fq_storage+'{fcid}/log/cp_sequencingstats.done'
+  log:
+    fq_storage+'{fcid}/log/cp_sequencingstats.log'
+  params:
+    sequencing  = lambda wildcards: fcdict[wildcards.fcid]['parentfolder']
+  shell:
+    """
+    export FQSTORAGE={fq_storage}
+    export RAWFOLDER={params.sequencing}
+    export STATFOLDER={params.sequencing}stats/
+    /group/sequencing/Bfx/scripts/common/cpSequencingStats.sh {wildcards.fcid} >& {log}
+    touch {output.done}
+    """
 
 rule run_chownership:
-	input:
-		fq_storage+longid+'/log/fq_into_db.done',
-		fq_storage+longid+'/log/fastqc.done'
-	output:
-		done = fq_storage+longid+'/log/change_owner.done'
-	shell:
-		"""
-		touch {output.done}
-		find {fq_storage}{longid} -type d -exec chmod 770 {{}} \;
-		find {fq_storage}{longid} -type f -exec chmod 660 {{}} \;
-		"""
+  input:
+    fq_storage+'{fcid}/log/fq_into_db.done',
+    fq_storage+'{fcid}/log/fastqc.done'
+  output:
+    done = fq_storage+'{fcid}/log/change_owner.done'
+  shell:
+    """
+    touch {output.done}
+    find {fq_storage}{wildcards.fcid} -type d -exec chmod 770 {{}} \;
+    find {fq_storage}{wildcards.fcid} -type f -exec chmod 660 {{}} \;
+    """
