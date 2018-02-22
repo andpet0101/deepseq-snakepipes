@@ -23,12 +23,12 @@ rule do_all:
     PIPETARGETS,
     CHANGEOWNER,
     SEQDONE
-  #shell:
-    #""""
-    #module load apps/python/2.7.8
-    #export PYTHONPATH=/group/sequencing/Bfx/scripts/common/dsp/dsp/src
-    #/group/sequencing/Bfx/scripts/common/doDemultiplex.py -m f
-    #"""
+  shell:
+    """
+    module load apps/python/2.7.8
+    export PYTHONPATH=/group/sequencing/Bfx/scripts/common/dsp/dsp/src
+    /group/sequencing/Bfx/scripts/common/doDemultiplex.py -m f
+    """
 
 rule run_bcl2fastq:
   output:
