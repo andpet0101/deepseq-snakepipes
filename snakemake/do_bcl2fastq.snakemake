@@ -82,21 +82,21 @@ rule run_fqintodatabase:
     """
 
 rule run_fastqcdemultiplex:
-	input:
-		fq_storage+longid+'/log/transport_fq.done'
-	output:
-		done = fq_storage+longid+'/log/fastqc.done'
-	log:
-		fq_storage+longid+'/log/fastqc.log'
-	threads:
-		8
-	shell:
-		"""
-		module load apps/fastqc/0.11.3
-		mkdir -p {fq_storage}{longid}/fastqc
-		find {fq_storage}{longid} -type f -name "*fastq.gz" | xargs -L ${{NSLOTS:-{threads}}} fastqc -t ${{NSLOTS:-{threads}}} -a /group/sequencing/Bfx/scripts/common/dsp/dsp/files/fastqc_adapter.txt -o {fq_storage}{longid}/fastqc --nogroup >& {log}
-		touch {output.done}
-		"""
+  input:
+    lambda wildcards: expand(fq_storage+'{fcid}/log/transport_fq.done', fcid = wildcards.fcid)
+  output:
+    done = fq_storage+'{fcid}/log/fastqc.done'
+  log:
+    fq_storage+'{fcid}/log/fastqc.log'
+  threads:
+    8
+  shell:
+    """
+    module load apps/fastqc
+    mkdir -p {fq_storage}{wildcards.fcid}/fastqc
+    find {fq_storage}{wildcards.fcid} -type f -name "*fastq.gz" | xargs -L ${{NSLOTS:-{threads}}} fastqc -t ${{NSLOTS:-{threads}}} -a /group/sequencing/Bfx/scripts/common/dsp/dsp/files/fastqc_adapter.txt -o {fq_storage}{wildcards.fcid}/fastqc --nogroup >& {log}
+    touch {output.done}
+    """
 
 rule run_cpseqstats:
   input:
