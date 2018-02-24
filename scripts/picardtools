@@ -6,8 +6,8 @@ JAR=$(module display apps/picard_tools 2>&1 | perl -ne 'if(m/java/ && m/\s(\/\S+
 # path of jar otherwise
 if [ -z "$JAR" ]
 then
- JAR="/share/apps/picard_tools/2.5.0/picard.jar"
+ JAR="/share/apps/picard_tools/2.9.0/picard.jar"
 fi
 
 # important: always do "$@"
-java $JAVA_OPTIONS -jar $JAR "$@"
+/share/apps/java/oracle_jdk_8u102/jdk1.8.0_102/bin/java $JAVA_OPTIONS -jar $JAR "$@"

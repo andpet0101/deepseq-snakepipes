@@ -5,6 +5,9 @@ use File::Basename;
 use Getopt::Long qw(:config pass_through);
 use Cwd 'abs_path';
 
+# whenever this script gets a interrupt signal (crlt+c), trap it and propagate it as terminate signal to childs
+$SIG{INT}=\&stop_here;
+
 ############
 # Settings #
 ############
@@ -167,7 +170,7 @@ $cmd .= $snakemake_bin;
 
 # for proper colour-coding
 unless(`which unbuffer`=~/^which: no unbuffer/){
-	$cmd = "unbuffer $cmd";
+	#$cmd = "unbuffer $cmd";
 }
 
 $cmd = "module load apps/snakemake || true;".$cmd;
@@ -299,6 +302,12 @@ sub snakemake_help{
 	print "==============================================================================================================\n\n";
 	system("module load apps/snakemake;$snakemake_bin --help");
 	exit(0);
+}
+
+sub stop_here
+{
+    print "Aah a interrupt signal\n";
+    kill -15, $$;
 }
 
 __END__

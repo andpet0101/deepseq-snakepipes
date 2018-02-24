@@ -40,9 +40,10 @@ VARIANT_CALLING_BAM_BAI_TARGETS = []
 for s in LIBRARIES:
 	VARIANT_CALLING_BAM_BAI_TARGETS.append(ALIGNER_CFG["program"] + "/" + s + ".variant_calling.bam")
 	VARIANT_CALLING_BAM_BAI_TARGETS.append(ALIGNER_CFG["program"] + "/" + s + ".variant_calling.bai")
-	VARIANT_CALLING_BAM_BAI_TARGETS.append(ALIGNER_CFG["program"] + "/report/data/" + s + ".recal_first_pass.txt")
-	VARIANT_CALLING_BAM_BAI_TARGETS.append(ALIGNER_CFG["program"] + "/report/data/" + s + ".recal_second_pass.txt")
-	VARIANT_CALLING_BAM_BAI_TARGETS.append(ALIGNER_CFG["program"] + "/report/pdf/" + s + ".recalibration.pdf")
+	if VARIANT_CALLING_CFG["base_recalibration_vcfs"]:
+		VARIANT_CALLING_BAM_BAI_TARGETS.append(ALIGNER_CFG["program"] + "/report/data/" + s + ".recal_first_pass.txt")
+		VARIANT_CALLING_BAM_BAI_TARGETS.append(ALIGNER_CFG["program"] + "/report/data/" + s + ".recal_second_pass.txt")
+		VARIANT_CALLING_BAM_BAI_TARGETS.append(ALIGNER_CFG["program"] + "/report/pdf/" + s + ".recalibration.pdf")
 
 #########
 # Rules #
@@ -204,7 +205,7 @@ rule run_GATK_IndelRealigner_rnaseq:
 		"\n\t\t("+module_load("GenomeAnalysisTK","picard_tools")+
 		"""
 		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx8g"
-		GATK -T IndelRealigner -R {params.reference} -I {input.bam} -targetIntervals {input.intervals} -o {output.bam} --filter_reads_with_N_cigar {params.target_region}	
+		GATK -T IndelRealigner -R {params.reference} -I {input.bam} -targetIntervals {input.intervals} -o {output.bam} --filter_reads_with_N_cigar	
 		picardtools BuildBamIndex I={output.bam} VALIDATION_STRINGENCY=SILENT TMP_DIR={TMP_DIR}) >& {log}
 		"""
 
@@ -242,7 +243,7 @@ rule run_GATK_SplitNCigarReads:
 		"\n\t\t("+module_load("GenomeAnalysisTK","picard_tools")+
 		"""
 		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx8g"
-		GATK -T SplitNCigarReads -R {params.reference}.fa -I {input.bam} -o {output.bam} -rf ReassignOneMappingQuality -RMQF 255 -RMQT 60 -U ALLOW_N_CIGAR_READS -fixNDN
+		GATK -T SplitNCigarReads -R {params.reference} -I {input.bam} -o {output.bam} -rf ReassignOneMappingQuality -RMQF 255 -RMQT 60 -U ALLOW_N_CIGAR_READS -fixNDN
 		picardtools BuildBamIndex I={output.bam} VALIDATION_STRINGENCY=SILENT TMP_DIR={TMP_DIR}) >& {log}
 		"""
 

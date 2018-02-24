@@ -1,10 +1,15 @@
 #!/usr/bin/perl
 
+my @f = ();
+
 while(<STDIN>){
 	chomp;
 	unless(m/^@/){
-		if(m/:CELL_([ACGTN-]+)/){$_ .= "\tXC:Z:$1";}
-		if(m/:UMI_([ACGTN-]+)/){$_ .= "\tXM:Z:$1";}
+		# UMI is at the end of the read name: leave it there and just add a MI tag for molecular identifier
+		@f = split(/\t/,$_);
+		if($f[0]=~/:([A-Z]+$)/){
+			$_ .= "\tMI:Z:$1";
+		}
 	}
 	print $_."\n";
 }

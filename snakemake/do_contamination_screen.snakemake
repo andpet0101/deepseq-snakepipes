@@ -71,7 +71,7 @@ rule summarise_fastq_screen:
 
 rule run_fastq_screen:
 	input:
-		fq="fastq/{basename}.clean.fastq.gz" if CLEAN_DATA_CFG else "fastq/{basename}.fastq.gz",
+		fq="fastq/{basename}.fastq.gz" if CLEAN_DATA_CFG else "fastq/{basename}.fastq.gz",
 		conf="fastq_screen/fastq_screen.conf"
 	output:
 		png="fastq_screen/{basename}_screen.png",

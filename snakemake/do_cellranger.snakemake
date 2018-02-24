@@ -11,7 +11,7 @@ import socket
 ####################
 CELLRANGER_CFG = config.get("cellranger",dict())
 
-# info about cellranger is needed
+## info about cellranger is needed
 if not CELLRANGER_CFG:
 	raise WorkflowError("Please provide an cellranger configuration!")
 
@@ -24,16 +24,35 @@ if "reference_dir" not in CELLRANGER_CFG:
 if not os.path.exists(CELLRANGER_CFG['reference_dir']):
 	raise WorkflowError("Could not find the cellranger reference directory!")
 
-if "normalize" not in CELLRANGER_CFG:
-	CELLRANGER_CFG["normalize"] = "mapped"
+## options for cellranger aggregate (combines experiments)
+if "aggregate" not in CELLRANGER_CFG:
+	CELLRANGER_AGGREGATE_CFG = dict()
+else:
+	CELLRANGER_AGGREGATE_CFG = CELLRANGER_CFG["aggregate"]
 
-if CELLRANGER_CFG["normalize"] not in ["none","mapped","raw"]:
+if "normalize" not in CELLRANGER_AGGREGATE_CFG:
+	CELLRANGER_AGGREGATE_CFG["normalize"] = "mapped"
+
+if CELLRANGER_AGGREGATE_CFG["normalize"] not in ["none","mapped","raw"]:
 	raise WorkflowError("The parameter 'normalize' can have only values: none, mapped, raw (see cellranger aggregate doc)!")
 
-if "nosecondary" not in CELLRANGER_CFG:
-	CELLRANGER_CFG["nosecondary"] = 0
+if "nosecondary" not in CELLRANGER_AGGREGATE_CFG:
+	CELLRANGER_AGGREGATE_CFG["nosecondary"] = 0
 
-# cellranger version - export if in config otherwise use latest version
+## options for cellranger count
+if "count" not in CELLRANGER_CFG:
+	CELLRANGER_COUNT_CFG = dict()
+else:
+	CELLRANGER_COUNT_CFG = CELLRANGER_CFG["count"]
+
+for s in SAMPLES:
+	if s not in CELLRANGER_COUNT_CFG:
+		CELLRANGER_COUNT_CFG[s] = dict()
+	if "expect-cells" not in CELLRANGER_COUNT_CFG[s]:
+		CELLRANGER_COUNT_CFG[s]["expect-cells"] = 3000
+
+
+## cellranger version - export if in config otherwise use latest version
 if PROGRAM_CFG and "cellranger" in PROGRAM_CFG:
 	os.environ["CELLRANGER_VERSION"] = PROGRAM_CFG["cellranger"]
 
@@ -74,8 +93,8 @@ rule run_cellranger_aggregate:
 	log:
 		"cellranger/log/all.cellranger_aggregate.log"
 	params:
-		normalize = CELLRANGER_CFG["normalize"],
-		nosecondary = "--nosecondary" if CELLRANGER_CFG["nosecondary"] else ""
+		normalize = CELLRANGER_AGGREGATE_CFG["normalize"],
+		nosecondary = "--nosecondary" if CELLRANGER_AGGREGATE_CFG["nosecondary"] else ""
 	shell:
 		"""
 		(rm -r cellranger/all
@@ -107,12 +126,13 @@ rule run_cellranger_count:
 	log:
 		"cellranger/log/{sample}.cellranger_count.log"
 	params:
-		cellranger_ref = CELLRANGER_CFG['reference_dir']
+		cellranger_ref = CELLRANGER_CFG['reference_dir'],
+		cell_number_arg = lambda wildcards: "--force-cells="+str(CELLRANGER_COUNT_CFG[wildcards.sample]["force-cells"]) if "force-cells" in CELLRANGER_COUNT_CFG[wildcards.sample] else "--expect-cells="+str(CELLRANGER_COUNT_CFG[wildcards.sample]["expect-cells"])
 	shell:
 		"""
 		(rm -r cellranger/{wildcards.sample}
 		if [[ "$(hostname)" == "login-0-0.local" ]] ;then jobparams="--jobmode=sge --localcores=1 --localmem=1"; else jobmode="--jobmode=local";fi
-		cd cellranger && run_cellranger count --id={wildcards.sample} --fastqs=fastq/ --sample={wildcards.sample} --description={wildcards.sample} --transcriptome={params.cellranger_ref} $jobparams) >& {log}
+		cd cellranger && run_cellranger count --id={wildcards.sample} --fastqs=fastq/ --sample={wildcards.sample} --description={wildcards.sample} --transcriptome={params.cellranger_ref} {params.cell_number_arg} $jobparams) >& {log}
 		touch {output}
 		"""
 

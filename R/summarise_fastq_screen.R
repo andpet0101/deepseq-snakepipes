@@ -40,7 +40,7 @@ bfx_id = arguments[1]
 data_directory = arguments[2]
 pdf_directory = arguments[3]
 
-#bfx_id = "bfx853"
+#bfx_id = "bfx862"
 #data_directory = "fastq_screen/report/data"
 #pdf_directory = "fastq_screen/report/pdf"
 
@@ -178,11 +178,19 @@ databases_plot_data = rbind(databases_plot_data,data.frame(Database="Ambiguous",
           perc_One_hit_one_genome=ambig$Ambiguous,
           perc_Multiple_hits_one_genome=0))
 
-# sort data and database levels by decreasing mean percentage
-mean_perc_per_database = databases_plot_data %>% group_by(Database) %>%
-  summarise(Mean_perc = mean(perc_One_hit_one_genome+perc_Multiple_hits_one_genome)) %>%
-  arrange(desc(Mean_perc)) %>% as.data.frame()
-databases_plot_data$Database = factor(as.character(databases_plot_data$Database),levels = as.character(mean_perc_per_database$Database))
+# sort database levels by decreasing number of top species in samples
+num_top_species = databases_plot_data %>% 
+  mutate(perc_one_genome_hits=perc_One_hit_one_genome+perc_Multiple_hits_one_genome) %>% 
+  group_by(Sample) %>%
+  filter(perc_one_genome_hits==max(perc_one_genome_hits)) %>%
+  group_by(Database) %>%
+  summarise(Samples=length(Database)) %>% as.data.frame()
+num_top_species[num_top_species$Database=="No hit","Samples"] = 0.1     # such that No hit and Ambiguous are always the last factor levels with hits
+num_top_species[num_top_species$Database=="Ambiguous","Samples"] = 0.2
+database_levels_with_hits = as.character(num_top_species[order(num_top_species$Samples,decreasing = T),"Database"])
+database_levels = levels(databases_plot_data$Database) 
+database_levels = c(database_levels_with_hits,database_levels[!database_levels %in% database_levels_with_hits])
+databases_plot_data$Database = factor(as.character(databases_plot_data$Database),levels = as.character(database_levels))
 
 # group 20 libraries per plot
 libraries_per_row = 20
