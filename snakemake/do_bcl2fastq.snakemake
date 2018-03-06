@@ -45,7 +45,7 @@ rule run_bcl2fastq:
   shell:
     """
     module load apps/bcl2fastq/{bcl2fastqversion}
-    bcl2fastq -R {params.rawpath} --interop-dir {fq_storage}{wildcards.fcid}/stats/{wildcards.csvid}/InterOp --sample-sheet {params.csvpath} -o {params.pipepath}/ --stats-dir {fq_storage}{wildcards.fcid}/stats/{wildcards.csvid} --reports-dir {fq_storage}{wildcards.fcid}/stats/{wildcards.csvid}/reports --barcode-mismatches {params.mismatchstring} {params.basesmaskstring} {params.additionalstring} >& {log}
+    bcl2fastq -R {params.rawpath} --interop-dir {fq_storage}{wildcards.fcid}/stats/{wildcards.csvid}/InterOp --sample-sheet {params.csvpath} -o {params.pipepath}/{wildcards.csvid} --stats-dir {fq_storage}{wildcards.fcid}/stats/{wildcards.csvid} --reports-dir {fq_storage}{wildcards.fcid}/stats/{wildcards.csvid}/reports --barcode-mismatches {params.mismatchstring} {params.basesmaskstring} {params.additionalstring} >& {log}
     touch {output.done}
     """
 
@@ -53,10 +53,8 @@ rule run_bcl2fastq:
 rule run_fqtransport:
   input:
     lambda wildcards: expand(pipeliningparent+'{fcid}/{csvid}/bcl2fastq.done', fcid = wildcards.fcid, csvid = fcdict[wildcards.fcid]['csvrun'].keys())
-    #expand('pipeliningparent/{fcid}/*/bcl2fastq.done', fcid = FCID)
-    #dynamic(pipeliningparent+'{fcid}/{csvid}/bcl2fastq.done')
   output:
-    done = fq_storage+'{fcid}/log/transport_fq.done'            # new 
+    done = fq_storage+'{fcid}/log/transport_fq.done'
   params:
     pipepath = lambda wildcards: fcdict[wildcards.fcid]['pipeliningpath']
   shell:
