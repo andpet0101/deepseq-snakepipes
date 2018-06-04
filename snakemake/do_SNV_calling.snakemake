@@ -268,7 +268,7 @@ rule run_GATK_HaplotypeCaller_rnaseq:
 rule filter_SNVs_wgs:
 	input:
 		vcf="gatk/DNAseq_SNVs." + ("recal_indels" if VARIANT_CALLING_CFG["indel_recalibration_vcfs"] else "recal_snp" if VARIANT_CALLING_CFG["snp_recalibration_vcfs"] else "varfilt") + ".vcf.gz",
-		tbi="gatk/DNAseq_SNVs." + ("recal_indels" if VARIANT_CALLING_CFG["indel_recalibration_vcfs"] else "recal_snp" if VARIANT_CALLING_CFG["snp_recalibration_vcfs"] else "varfilt") + ".vcf.gz"
+		tbi="gatk/DNAseq_SNVs." + ("recal_indels" if VARIANT_CALLING_CFG["indel_recalibration_vcfs"] else "recal_snp" if VARIANT_CALLING_CFG["snp_recalibration_vcfs"] else "varfilt") + ".vcf.gz.tbi"
 	output:
 		vcf="gatk/DNAseq_SNVs.filt.vcf.gz",
 		tbi="gatk/DNAseq_SNVs.filt.vcf.gz.tbi"
@@ -349,6 +349,7 @@ rule run_GATK_VariantRecalibrator_indels:
 		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx12G"
 		GATK -T VariantRecalibrator -R {params.reference} -input {input.vcf} -recalFile {output.recal} -tranchesFile {output.tranches} -rscriptFile gatk/report/pdf/DNAseq_SNVs.indels.recal.R  \
 		-resource:{params.resource_string} -an QD -an DP -an FS -an SOR -an MQRankSum -an ReadPosRankSum  -mode INDEL --maxGaussians 4 -tranche 100.0 -tranche 99.9 -tranche 99.0 -tranche 90.0) 2>> {log} 1>&2
+		mv gatk/report/pdf/DNAseq_SNVs.indels.recal.R.pdf {output.plot}
 		"""
 
 
@@ -395,6 +396,7 @@ rule run_GATK_VariantRecalibrator_snp:
 		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx12G"
 		GATK -T VariantRecalibrator -R {params.reference} -input {input.vcf} -recalFile {output.recal} -tranchesFile {output.tranches} -rscriptFile gatk/report/pdf/DNAseq_SNVs.snp.recal.R  \
 		-resource:{params.resource_string} -an DP -an QD -an FS -an SOR -an MQ -an MQRankSum -an ReadPosRankSum -mode SNP --maxGaussians 4  -tranche 100.0 -tranche 99.9 -tranche 99.0 -tranche 90.0) >& {log}
+		mv gatk/report/pdf/DNAseq_SNVs.snp.recal.R.pdf {output.plot}
 		"""
 
 
@@ -450,14 +452,15 @@ rule run_GATK_HaplotypeCaller_wgs:
 		"gatk/log/{basename}.haplotypecaller.log"
 	params:
 		reference=REFERENCE_CFG["path"]+".fa",
-		target_region="--interval_padding 100 -L "+VARIANT_CALLING_CFG["target_regions_bed"] if VARIANT_CALLING_CFG["target_regions_bed"] else ""
+		target_region="--interval_padding 100 -L "+VARIANT_CALLING_CFG["target_regions_bed"] if VARIANT_CALLING_CFG["target_regions_bed"] else "",
+		ploidy=2
 	threads:
 		8
 	shell:
 		"\n\t\t("+module_load("GenomeAnalysisTK")+
 		"""
 		export JAVA_OPTIONS="-Djava.io.tmpdir=. -Xmx60G"
-		GATK -T HaplotypeCaller -R {params.reference} -I {input.bam} -o {output.gvcf} --emitRefConfidence GVCF --genotyping_mode DISCOVERY --variant_index_type LINEAR --variant_index_parameter 128000 -nct ${{NSLOTS:-{threads}}} {params.target_region}) >& {log}
+		GATK -T HaplotypeCaller -R {params.reference} -I {input.bam} -o {output.gvcf} --emitRefConfidence GVCF -ploidy {params.ploidy} --genotyping_mode DISCOVERY --variant_index_type LINEAR --variant_index_parameter 128000 -nct ${{NSLOTS:-{threads}}} {params.target_region}) >& {log}
 		"""
 
 

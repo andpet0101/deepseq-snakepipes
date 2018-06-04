@@ -50,6 +50,8 @@ for s in SAMPLES:
 		CELLRANGER_COUNT_CFG[s] = dict()
 	if "expect-cells" not in CELLRANGER_COUNT_CFG[s]:
 		CELLRANGER_COUNT_CFG[s]["expect-cells"] = 3000
+	if "chemistry" not in CELLRANGER_COUNT_CFG[s]:
+		CELLRANGER_COUNT_CFG[s]["chemistry"] = "auto"
 
 
 ## cellranger version - export if in config otherwise use latest version
@@ -127,12 +129,13 @@ rule run_cellranger_count:
 		"cellranger/log/{sample}.cellranger_count.log"
 	params:
 		cellranger_ref = CELLRANGER_CFG['reference_dir'],
-		cell_number_arg = lambda wildcards: "--force-cells="+str(CELLRANGER_COUNT_CFG[wildcards.sample]["force-cells"]) if "force-cells" in CELLRANGER_COUNT_CFG[wildcards.sample] else "--expect-cells="+str(CELLRANGER_COUNT_CFG[wildcards.sample]["expect-cells"])
+		cell_number_arg = lambda wildcards: "--force-cells="+str(CELLRANGER_COUNT_CFG[wildcards.sample]["force-cells"]) if "force-cells" in CELLRANGER_COUNT_CFG[wildcards.sample] else "--expect-cells="+str(CELLRANGER_COUNT_CFG[wildcards.sample]["expect-cells"]),
+		chemistry = lambda wildcards: CELLRANGER_COUNT_CFG[wildcards.sample]["chemistry"]
 	shell:
 		"""
 		(rm -r cellranger/{wildcards.sample}
 		if [[ "$(hostname)" == "login-0-0.local" ]] ;then jobparams="--jobmode=sge --localcores=1 --localmem=1"; else jobmode="--jobmode=local";fi
-		cd cellranger && run_cellranger count --id={wildcards.sample} --fastqs=fastq/ --sample={wildcards.sample} --description={wildcards.sample} --transcriptome={params.cellranger_ref} {params.cell_number_arg} $jobparams) >& {log}
+		cd cellranger && run_cellranger count --id={wildcards.sample} --fastqs=fastq/ --sample={wildcards.sample} --description={wildcards.sample} --chemistry={params.chemistry} --transcriptome={params.cellranger_ref} {params.cell_number_arg} $jobparams) >& {log}
 		touch {output}
 		"""
 

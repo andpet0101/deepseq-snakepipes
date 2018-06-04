@@ -43,7 +43,7 @@ for s in LIBRARIES:
 	if VARIANT_CALLING_CFG["base_recalibration_vcfs"]:
 		VARIANT_CALLING_BAM_BAI_TARGETS.append(ALIGNER_CFG["program"] + "/report/data/" + s + ".recal_first_pass.txt")
 		VARIANT_CALLING_BAM_BAI_TARGETS.append(ALIGNER_CFG["program"] + "/report/data/" + s + ".recal_second_pass.txt")
-		VARIANT_CALLING_BAM_BAI_TARGETS.append(ALIGNER_CFG["program"] + "/report/pdf/" + s + ".recalibration.pdf")
+	#	VARIANT_CALLING_BAM_BAI_TARGETS.append(ALIGNER_CFG["program"] + "/report/pdf/" + s + ".recalibration.pdf")
 
 #########
 # Rules #

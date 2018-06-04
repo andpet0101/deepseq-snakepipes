@@ -194,9 +194,9 @@ if "fastq" not in INPUT_CFG:
 if not INPUT_CFG["fastq"]:
 	raise WorkflowError("Could not find FASTQ files in the 'fastq' directory!")
 
-for f in INPUT_CFG["fastq"]:
-	if not os.path.exists("fastq/"+f):
-		raise WorkflowError("FASTQ file "+f+" seems to be broke!")
+#for f in INPUT_CFG["fastq"]:
+#	if not os.path.exists("fastq/"+f):
+#		raise WorkflowError("FASTQ file "+f+" seems to be broke!")
 
 INPUT_CFG["fastq_base"] = [re.sub('\.\S+$','',re.sub('\.fastq.gz','',f)) for f in INPUT_CFG["fastq"]]
 INPUT_CFG["fastq_base"] = sorted(set(INPUT_CFG["fastq_base"]),key=lambda x: INPUT_CFG["fastq_base"].index(x))
