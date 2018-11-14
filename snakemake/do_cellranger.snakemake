@@ -1,9 +1,11 @@
 try:
-	GENERAL_SETTINGS_INCLUDED
+    GENERAL_SETTINGS_INCLUDED
 except NameError: 
-	include: "general_settings.snakemake"
+    include: "general_settings.snakemake"
 
 import socket
+from os.path import basename
+from os.path import abspath
 
 
 ####################
@@ -13,50 +15,50 @@ CELLRANGER_CFG = config.get("cellranger",dict())
 
 ## info about cellranger is needed
 if not CELLRANGER_CFG:
-	raise WorkflowError("Please provide an cellranger configuration!")
+    raise WorkflowError("Please provide an cellranger configuration!")
 
 if "reference_dir" not in CELLRANGER_CFG:
-	if SPECIES and ANNOTATION_CFG and "version" in ANNOTATION_CFG and REFERENCE_CFG and "version" in REFERENCE_CFG and os.path.exists("/projects/seq-work/user/pipeline/cellranger/"+SPECIES+"/"+REFERENCE_CFG["version"]+".e"+ANNOTATION_CFG["version"]):
-		CELLRANGER_CFG['reference_dir'] = "/projects/seq-work/user/pipeline/cellranger/"+SPECIES+"/"+REFERENCE_CFG["version"]+".e"+ANNOTATION_CFG["version"]
-	else:
-		raise WorkflowError("Please provide a cellranger reference directory either built-in via annotation.version plus reference.version plus species or via cellranger.reference_dir!")
+    if SPECIES and ANNOTATION_CFG and "version" in ANNOTATION_CFG and REFERENCE_CFG and "version" in REFERENCE_CFG and os.path.exists("/projects/seq-work/user/pipeline/cellranger/"+SPECIES+"/"+REFERENCE_CFG["version"]+".e"+ANNOTATION_CFG["version"]):
+        CELLRANGER_CFG['reference_dir'] = "/projects/seq-work/user/pipeline/cellranger/"+SPECIES+"/"+REFERENCE_CFG["version"]+".e"+ANNOTATION_CFG["version"]
+    else:
+        raise WorkflowError("Please provide a cellranger reference directory either built-in via annotation.version plus reference.version plus species or via cellranger.reference_dir!")
 
 if not os.path.exists(CELLRANGER_CFG['reference_dir']):
-	raise WorkflowError("Could not find the cellranger reference directory!")
+    raise WorkflowError("Could not find the cellranger reference directory!")
 
 ## options for cellranger aggregate (combines experiments)
 if "aggregate" not in CELLRANGER_CFG:
-	CELLRANGER_AGGREGATE_CFG = dict()
+    CELLRANGER_AGGREGATE_CFG = dict()
 else:
-	CELLRANGER_AGGREGATE_CFG = CELLRANGER_CFG["aggregate"]
+    CELLRANGER_AGGREGATE_CFG = CELLRANGER_CFG["aggregate"]
 
 if "normalize" not in CELLRANGER_AGGREGATE_CFG:
-	CELLRANGER_AGGREGATE_CFG["normalize"] = "mapped"
+    CELLRANGER_AGGREGATE_CFG["normalize"] = "mapped"
 
 if CELLRANGER_AGGREGATE_CFG["normalize"] not in ["none","mapped","raw"]:
-	raise WorkflowError("The parameter 'normalize' can have only values: none, mapped, raw (see cellranger aggregate doc)!")
+    raise WorkflowError("The parameter 'normalize' can have only values: none, mapped, raw (see cellranger aggregate doc)!")
 
 if "nosecondary" not in CELLRANGER_AGGREGATE_CFG:
-	CELLRANGER_AGGREGATE_CFG["nosecondary"] = 0
+    CELLRANGER_AGGREGATE_CFG["nosecondary"] = 0
 
 ## options for cellranger count
 if "count" not in CELLRANGER_CFG:
-	CELLRANGER_COUNT_CFG = dict()
+    CELLRANGER_COUNT_CFG = dict()
 else:
-	CELLRANGER_COUNT_CFG = CELLRANGER_CFG["count"]
+    CELLRANGER_COUNT_CFG = CELLRANGER_CFG["count"]
 
 for s in SAMPLES:
-	if s not in CELLRANGER_COUNT_CFG:
-		CELLRANGER_COUNT_CFG[s] = dict()
-	if "expect-cells" not in CELLRANGER_COUNT_CFG[s]:
-		CELLRANGER_COUNT_CFG[s]["expect-cells"] = 3000
-	if "chemistry" not in CELLRANGER_COUNT_CFG[s]:
-		CELLRANGER_COUNT_CFG[s]["chemistry"] = "auto"
+    if s not in CELLRANGER_COUNT_CFG:
+        CELLRANGER_COUNT_CFG[s] = dict()
+    if "expect-cells" not in CELLRANGER_COUNT_CFG[s]:
+        CELLRANGER_COUNT_CFG[s]["expect-cells"] = 3000
+    if "chemistry" not in CELLRANGER_COUNT_CFG[s]:
+        CELLRANGER_COUNT_CFG[s]["chemistry"] = "auto"
 
 
 ## cellranger version - export if in config otherwise use latest version
 if PROGRAM_CFG and "cellranger" in PROGRAM_CFG:
-	os.environ["CELLRANGER_VERSION"] = PROGRAM_CFG["cellranger"]
+    os.environ["CELLRANGER_VERSION"] = PROGRAM_CFG["cellranger"]
 
 ###########
 # Targets #
@@ -64,15 +66,19 @@ if PROGRAM_CFG and "cellranger" in PROGRAM_CFG:
 
 CELLRANGER_FASTQ = {}
 for l in LIBRARIES:
-	m = re.search("(^L\d+)_(\S+)",l)
-	lb = m.group(1)
-	sm = m.group(2)
-	if sm not in CELLRANGER_FASTQ:
-		CELLRANGER_FASTQ[sm] = []
-	CELLRANGER_FASTQ[sm].append("cellranger/fastq/"+sm+"_"+lb+"_L001_R1_001.fastq.gz")
-	CELLRANGER_FASTQ[sm].append("cellranger/fastq/"+sm+"_"+lb+"_L001_R2_001.fastq.gz")
-	CELLRANGER_FASTQ[sm].append("cellranger/fastq/"+sm+"_"+lb+"_L001_I1_001.fastq.gz")
+    m = re.search("(^L\d+)_(\S+)",l)
+    lb = m.group(1)
+    sm = m.group(2)
+    if sm == "all":
+        raise WorkflowError("Cannot name sample 'all' because 'all' is reserved!")
+    if sm not in CELLRANGER_FASTQ:
+        CELLRANGER_FASTQ[sm] = []
+    CELLRANGER_FASTQ[sm].append("cellranger/fastq/"+sm+"_"+lb+"_L001_R1_001.fastq.gz")
+    CELLRANGER_FASTQ[sm].append("cellranger/fastq/"+sm+"_"+lb+"_L001_R2_001.fastq.gz")
+    CELLRANGER_FASTQ[sm].append("cellranger/fastq/"+sm+"_"+lb+"_L001_I1_001.fastq.gz")
 
+CELLRANGER_FASTQ['all'] = ['cellranger/.1234'] # that is a dummy
+    
 
 #########
 # Rules #
@@ -80,74 +86,122 @@ for l in LIBRARIES:
 
 shell.prefix("set -ef -o pipefail;")
 
-localrules: run_cellranger_count,run_cellranger_aggregate
+localrules: run_cellranger_count,run_cellranger_aggregate,link_cellranger_web_summary_html,create_copy_cellranger_metrics_summary_script,create_cellranger_readme
+ruleorder: run_cellranger_aggregate > run_cellranger_count
 
 rule do_all:
-	input:
-		"cellranger/all/cellranger_aggregate.done" if len(SAMPLES)>1 else "cellranger/"+SAMPLES[0]+"/cellranger_count.done"
+    input:
+        cellranger=["cellranger/"+s+"/cellranger.done" for s in SAMPLES]+(["cellranger/all/cellranger.done"] if len(SAMPLES)>1 else []),
+        publish=["cellranger/publish/"+PROJECT+"."+s+".zip" for s in SAMPLES]+(["cellranger/publish/"+PROJECT+".all.zip"] if len(SAMPLES)>1 else []),
+        html=["cellranger/publish/"+PROJECT+"."+s+".web_summary.html" for s in SAMPLES]+(["cellranger/publish/"+PROJECT+".all.web_summary.html"] if len(SAMPLES)>1 else []),
+        copy_metrics=["cellranger/publish/"+PROJECT+"."+s+".copy_metrics.sh" for s in SAMPLES]
+
+
+# copy metrics_summary.csv for each sample to our 10x stats directory, use sample id as name
+rule  create_copy_cellranger_metrics_summary_script:
+    input:
+        csv="cellranger/{basename}/cellranger.done"
+    output:
+        "cellranger/publish/"+PROJECT+".{basename}.copy_metrics.sh"
+    params:
+        first_lib_id=lambda wildcards: re.sub('^\S+_(L[0-9]+)$','\\1',re.sub('_L001_\\S+','',basename(CELLRANGER_FASTQ[wildcards.basename][0]))),
+        full_path=abspath("cellranger/{basename}/outs/metrics_summary.csv")
+    shell:
+        """
+        echo "cp -f {params.full_path} /group/sequencing/Experiment_Documentation/Development/B_scDev/10XChromium/cellranger_metrics/{params.first_lib_id}.csv" > {output}
+        """
+        
+# link html web_summary files
+rule link_cellranger_web_summary_html:
+    input:
+        csv="cellranger/{basename}/cellranger.done",
+        zip="cellranger/publish/"+PROJECT+".{basename}.zip"
+    output:
+        html="cellranger/publish/"+PROJECT+".{basename}.web_summary.html"
+    log:
+        "cellranger/log/{basename}.link_web_summary_html.log"
+    params:
+        project=PROJECT
+    shell:
+        """
+        cd cellranger/publish/ && ln -s ../{wildcards.basename}/outs/web_summary.html {params.project}.{wildcards.basename}.web_summary.html
+        """
+        
+# zip cellranger results
+rule zip_cellranger_results:
+    input:
+        csv="cellranger/{basename}/cellranger.done"
+    output:
+        zip="cellranger/publish/"+PROJECT+".{basename}.zip"
+    log:
+        "cellranger/log/{basename}.zip_cellranger_results.log"
+    params:
+        project=PROJECT
+    shell:
+        """
+        cd cellranger/publish/ && ln -s ../{wildcards.basename}/outs {params.project}.{wildcards.basename} && zip -9 -r - {params.project}.{wildcards.basename} -x "*possorted_genome_bam.bam*" > {params.project}.{wildcards.basename}.zip && rm {params.project}.{wildcards.basename} 
+        """
 
 # runs cellranger aggr
 rule run_cellranger_aggregate:
-	input:
-		csv="cellranger/aggregate_samples.csv"
-	output:
-		"cellranger/all/cellranger_aggregate.done"
-	log:
-		"cellranger/log/all.cellranger_aggregate.log"
-	params:
-		normalize = CELLRANGER_AGGREGATE_CFG["normalize"],
-		nosecondary = "--nosecondary" if CELLRANGER_AGGREGATE_CFG["nosecondary"] else ""
-	shell:
-		"""
-		(rm -r cellranger/all
-		if [[ "$(hostname)" == "login-0-0.local" ]] ;then jobparams="--jobmode=sge --localcores=1 --localmem=1"; else jobmode="--jobmode=local";fi
-		
-		cd cellranger && run_cellranger aggr --id=all --csv=aggregate_samples.csv --normalize={params.normalize} {params.nosecondary} $jobparams) >& {log}
-		touch {output}
-		"""
+    input:
+        csv="cellranger/aggregate_samples.csv"
+    output:
+        "cellranger/all/cellranger.done"
+    log:
+        "cellranger/log/all.cellranger_aggregate.log"
+    params:
+        normalize = CELLRANGER_AGGREGATE_CFG["normalize"],
+        nosecondary = "--nosecondary" if CELLRANGER_AGGREGATE_CFG["nosecondary"] else ""
+    shell:
+        """
+        (rm -r cellranger/all
+        if [[ "$(hostname)" == "login-0-0.local" ]] ;then jobparams="--jobmode=sge --localcores=1 --localmem=1"; else jobmode="--jobmode=local";fi
+        
+        cd cellranger && run_cellranger aggr --id=all --csv=aggregate_samples.csv --normalize={params.normalize} {params.nosecondary} $jobparams) >& {log}
+        touch {output}
+        """
 
 # prepares a csv for aggregating multiple cellranger runs
 rule prepare_cellranger_aggregate_csv:
-	input:
-		cell=["cellranger/"+s+"/cellranger_count.done" for s in SAMPLES]
-	output:
-		"cellranger/aggregate_samples.csv"
-	run:
-		with open(output[0], 'w') as out:
-			out.write("library_id,molecule_h5\n")
-			for s in SAMPLES:
-				out.write(s+","+s+"/outs/molecule_info.h5\n")
+    output:
+        "cellranger/aggregate_samples.csv"
+    run:
+        with open(output[0], 'w') as out:
+            out.write("library_id,molecule_h5\n")
+            for s in SAMPLES:
+                out.write(s+","+s+"/outs/molecule_info.h5\n")
 
 
 # runs cellranger count
 rule run_cellranger_count:
-	input:
-		"cellranger/{sample}/all_fastqs_prepared.done"
-	output:
-		"cellranger/{sample}/cellranger_count.done"
-	log:
-		"cellranger/log/{sample}.cellranger_count.log"
-	params:
-		cellranger_ref = CELLRANGER_CFG['reference_dir'],
-		cell_number_arg = lambda wildcards: "--force-cells="+str(CELLRANGER_COUNT_CFG[wildcards.sample]["force-cells"]) if "force-cells" in CELLRANGER_COUNT_CFG[wildcards.sample] else "--expect-cells="+str(CELLRANGER_COUNT_CFG[wildcards.sample]["expect-cells"]),
-		chemistry = lambda wildcards: CELLRANGER_COUNT_CFG[wildcards.sample]["chemistry"]
-	shell:
-		"""
-		(rm -r cellranger/{wildcards.sample}
-		if [[ "$(hostname)" == "login-0-0.local" ]] ;then jobparams="--jobmode=sge --localcores=1 --localmem=1"; else jobmode="--jobmode=local";fi
-		cd cellranger && run_cellranger count --id={wildcards.sample} --fastqs=fastq/ --sample={wildcards.sample} --description={wildcards.sample} --chemistry={params.chemistry} --transcriptome={params.cellranger_ref} {params.cell_number_arg} $jobparams) >& {log}
-		touch {output}
-		"""
+    input:
+        "cellranger/{sample}/all_fastqs_prepared.done"
+    output:
+        "cellranger/{sample}/cellranger.done"
+    log:
+        "cellranger/log/{sample}.cellranger_count.log"
+    params:
+        cellranger_ref = CELLRANGER_CFG['reference_dir'],
+        cell_number_arg = lambda wildcards: "--force-cells="+str(CELLRANGER_COUNT_CFG[wildcards.sample]["force-cells"]) if "force-cells" in CELLRANGER_COUNT_CFG[wildcards.sample] else "--expect-cells="+str(CELLRANGER_COUNT_CFG[wildcards.sample]["expect-cells"]),
+        chemistry = lambda wildcards: CELLRANGER_COUNT_CFG[wildcards.sample]["chemistry"]
+    shell:
+        """
+        (rm -r cellranger/{wildcards.sample}
+        if [[ "$(hostname)" == "login-0-0.local" ]] ;then jobparams="--jobmode=sge --localcores=1 --localmem=1"; else jobmode="--jobmode=local";fi
+        cd cellranger && run_cellranger count --id={wildcards.sample} --fastqs=fastq/ --sample={wildcards.sample} --description={wildcards.sample} --chemistry={params.chemistry} --transcriptome={params.cellranger_ref} {params.cell_number_arg} $jobparams) >& {log}
+        touch {output}
+        """
 
 
 # checks if all fastq files were prepared properly
 rule fastqs_prepared_for_cellranger:
-	input: 
-		lambda wildcards: CELLRANGER_FASTQ[wildcards.sample]
-	output: 
-		"cellranger/{sample}/all_fastqs_prepared.done"
-	shell: 
-		"touch {output}"
+    input: 
+        lambda wildcards: CELLRANGER_FASTQ[wildcards.sample]
+    output: 
+        "cellranger/{sample}/all_fastqs_prepared.done"
+    shell: 
+        "touch {output}"
 
 # prepares fastq files for cellranger
 #
@@ -157,19 +211,34 @@ rule fastqs_prepared_for_cellranger:
 #
 # important: datasets with same sample but different library names are aggregated
 rule prepare_fastq_for_cellranger:
-	input:
-		r1="fastq/{libid}_{sample}_R1.fastq.gz",
-		r2="fastq/{libid}_{sample}_R2.fastq.gz"
-	output:
-		r1="cellranger/fastq/{sample}_{libid}_L001_R1_001.fastq.gz",
-		r2="cellranger/fastq/{sample}_{libid}_L001_R2_001.fastq.gz",
-		i1="cellranger/fastq/{sample}_{libid}_L001_I1_001.fastq.gz"
-	log:
-		"cellranger/log/{sample}_{libid}.prepare_fastq_for_cellranger.log"
-	shell:
-		"""
-		(ln -fs ../../{input.r1} {output.r1}
-		ln -fs ../../{input.r2} {output.r2}
-		zcat  {output.r1} | gawk 'BEGIN{{FS=":"}}{{if(NR%4==1){{bc=$10;qc=gensub(/./,"A","g",bc)}} if(NR%4==2){{print bc;}}else if(NR%4==0){{print qc}} else{{print;}}}}' | gzip -c > {output.i1}) >& {log}
-		"""
-	
+    input:
+        r1="fastq/{libid}_{sample}_R1.fastq.gz",
+        r2="fastq/{libid}_{sample}_R2.fastq.gz"
+    output:
+        r1="cellranger/fastq/{sample}_{libid}_L001_R1_001.fastq.gz",
+        r2="cellranger/fastq/{sample}_{libid}_L001_R2_001.fastq.gz",
+        i1="cellranger/fastq/{sample}_{libid}_L001_I1_001.fastq.gz"
+    log:
+        "cellranger/log/{sample}_{libid}.prepare_fastq_for_cellranger.log"
+    shell:
+        """
+        (ln -fs ../../{input.r1} {output.r1}
+        ln -fs ../../{input.r2} {output.r2}
+        zcat  {output.r1} | gawk 'BEGIN{{FS=":"}}{{if(NR%4==1){{bc=$10;qc=gensub(/./,"A","g",bc)}} if(NR%4==2){{print bc;}}else if(NR%4==0){{print qc}} else{{print;}}}}' | gzip -c > {output.i1}) >& {log}
+        """
+
+#########################################
+# When workflow finishes, create readme #
+#########################################
+        
+onsuccess:
+    with open('cellranger/readme', 'w') as out:
+        out.write('''
+Cellranger has finished successfully:
+
+- The ouput for the sample XYZ can be found in the cellranger/XYZ/outs directory. The output for the combined samples can be found in the cellranger/all/outs directory.
+- For each of these directories, there are zip files with the results (excluding bam files) for publishing to clients. 
+- The publish directory also contains renamed web_summary.html files that should be attached as documents to the bfx.
+- The copy_metrics.sh scripts in the publish directory copy the respective metrics_summary.csv to our stats directory at /group/sequencing/Experiment_Documentation/Development/B_scDev/10XChromium. Please run all of them, so that the stats are copied.
+- These metrics_summary.csv files are renamed according to the respective sample id or the library id. The R script in this stats directory then will get all neccessary information from the database.
+        ''')

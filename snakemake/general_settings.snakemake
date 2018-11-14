@@ -178,7 +178,11 @@ if not TMP_DIR:
 
 # paths ############
 os.environ['PATH'] = os.path.dirname(os.path.abspath(workflow.snakefile)) + "/../scripts/:" + os.path.dirname(os.path.abspath(workflow.snakefile)) + "/../R/:/group/sequencing/Bfx/scripts/common/:" + os.environ['PATH']
-os.environ['PYTHONPATH'] = "/group/sequencing/Bfx/scripts/common/dsp/dsp/src/:" + os.environ['PYTHONPATH']
+
+if 'PYTHONPATH' in os.environ:
+    os.environ['PYTHONPATH'] = "/group/sequencing/Bfx/scripts/common/dsp/dsp/src/:" + os.environ['PYTHONPATH']
+else:
+    os.environ['PYTHONPATH'] = "/group/sequencing/Bfx/scripts/common/dsp/dsp/src/"
 os.environ['R_LIBS_USER']='/share/apps/R/3.3.0/lib64/R/library'
 
 ##############################

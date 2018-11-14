@@ -1,0 +1,122 @@
+try:
+    GENERAL_SETTINGS_INCLUDED
+except NameError: 
+    include: "general_settings.snakemake"
+
+include: "do_data_cleaning.snakemake"
+
+####################
+# Config/Parameter #
+####################
+
+MIXCR_CFG = config.get("mixcr",dict())
+if "chain" not in MIXCR_CFG:
+    MIXCR_CFG["chain"] = "TCR"
+
+MIXCR_CFG["species"] = "ABC"
+if SPECIES == "homo_sapiens":
+    MIXCR_CFG["species"] = "hsa"
+elif SPECIES == "mus_musculus":
+    MIXCR_CFG["species"] = "mmu"
+else:
+    raise WorkflowError("Currently only human or mouse are supported as species!")
+
+
+MIXCR = "/group/sequencing/Bfx/scripts/extern/mixcr-2.1.12/mixcr"
+	
+###########
+# Targets #
+###########
+
+
+#########
+# Rules #
+#########
+
+shell.prefix("set -evuf -o pipefail;")
+
+ruleorder: run_miXCR_align_paired > run_miXCR_align_single
+
+rule do_miTCR:
+    input:
+        ["miXCR/"+l+".clns" for l in LIBRARIES],
+        ["miXCR/"+l+".vdjca" for l in LIBRARIES],
+        ["miXCR/"+l+".clones.txt" for l in LIBRARIES],
+        ["miXCR/"+l+".alignments.txt" for l in LIBRARIES]
+
+rule run_miXCR_export:
+    input:
+        vdjca="miXCR/{basename}.vdjca",
+        clns="miXCR/{basename}.clns",
+    output:
+        clones="miXCR/{basename}.clones.txt",
+        alignments="miXCR/{basename}.alignments.txt"
+    log:
+        "miXCR/log/{basename}.export.log"
+    threads:
+        4
+    params:
+        mixcr=MIXCR,
+        chain=MIXCR_CFG["chain"]
+    shell:
+        """
+        ({params.mixcr} exportAlignments {input.vdjca} {output.alignments}
+        {params.mixcr} exportClones {input.clns} {output.clones}
+        ) >& {log}
+        """
+    
+rule run_miXCR_assemble:
+    input:
+        vdjca="miXCR/{basename}.vdjca"
+    output:
+        clns="miXCR/{basename}.clns",
+        report="miXCR/report/data/{basename}.assemble.txt"
+    log:
+        "miXCR/log/{basename}.assemble.log"
+    threads:
+        4
+    params:
+        mixcr=MIXCR
+    shell:
+        """
+        ({params.mixcr} assemble -t ${{NSLOTS:-{threads}}} -r {output.report}  {input.vdjca} {output.clns}) >& {log}
+        """
+
+rule run_miXCR_align_paired:
+    input:
+        fq1="fastq/{basename}_R1.clean.fastq.gz" if CLEAN_DATA_CFG else "fastq/{basename}_R1.fastq.gz",
+        fq2="fastq/{basename}_R2.clean.fastq.gz" if CLEAN_DATA_CFG else "fastq/{basename}_R2.fastq.gz"
+    output:
+        vdjca="miXCR/{basename}.vdjca",
+        report="miXCR/report/data/{basename}.align.txt"
+    log:
+        "miXCR/log/{basename}.align.log"
+    threads:
+        4
+    params:
+        mixcr=MIXCR,
+        species=MIXCR_CFG["species"]
+    shell:
+        """
+        ({params.mixcr} align -OallowPartialAlignments=true -t ${{NSLOTS:-{threads}}} -r {output.report} -f -s {params.species} -g {input.fq1} {input.fq2} {output.vdjca}) >& {log}
+        """
+    
+rule run_miXCR_align_single:
+    input:
+        fq="fastq/{basename}_R1.clean.fastq.gz" if CLEAN_DATA_CFG else "fastq/{basename}_R1.fastq.gz"
+    output:
+        vdjca="miXCR/{basename}.vdjca",
+        report="miXCR/report/data/{basename}.align.txt"
+    log:
+        "miXCR/log/{basename}.align.log"
+    threads:
+        4
+    params:
+        mixcr=MIXCR,
+        species=MIXCR_CFG["species"]
+    shell:
+        """
+        ({params.mixcr} align -t ${{NSLOTS:-{threads}}} -r {output.report} -f -s {params.species} -g {input} {output.vdjca}) >& {log}
+        """
+
+

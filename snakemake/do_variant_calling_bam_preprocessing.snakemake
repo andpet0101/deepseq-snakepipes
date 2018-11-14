@@ -262,7 +262,7 @@ rule run_MarkDuplicates:
 		"\n\t\t("+module_load("picard_tools")+
 		"""
 		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx8g -XX:-UseGCOverheadLimit"
-		picardtools MarkDuplicates I={input.bam} O={output.bam} M={output.csv} REMOVE_DUPLICATES=false CREATE_INDEX=true TAGGING_POLICY=All TMP_DIR={TMP_DIR} VALIDATION_STRINGENCY=SILENT) >& {log}
+		picardtools MarkDuplicates I={input.bam} O={output.bam} M={output.csv} REMOVE_DUPLICATES=false CREATE_INDEX=true TAGGING_POLICY=All TMP_DIR={TMP_DIR} ) >& {log}
 		"""
 
 # fixes the mate information in wgs/exome data
@@ -279,7 +279,7 @@ rule run_FixMateInformation_wgs:
 		"\n\t\t("+module_load("picard_tools")+		
 		"""
 		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx2g"
-		picardtools FixMateInformation I={input.bam} O={output.bam} CREATE_INDEX=true VALIDATION_STRINGENCY=SILENT SO=coordinate) >& {log}
+		picardtools FixMateInformation I={input.bam} O={output.bam} CREATE_INDEX=true  SO=coordinate) >& {log}
 		"""
 
 
@@ -299,7 +299,7 @@ rule run_FixMateInformation_rnaseq:
 		"\n\t\t("+module_load("samtools","picard_tools")+
 		"""
 		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx2g"
-		samtools view -h {input.bam} | egrep -v "XO:Z:(CT|CC|PM|PS|PI|PL|UT|HT|HM|CM|CC|UM)" | fix_adajacent_N_I_cigar_ops.pl | picardtools FixMateInformation I=/dev/stdin O={output.bam} CREATE_INDEX=true VALIDATION_STRINGENCY=SILENT TMP_DIR={TMP_DIR} SO=coordinate) >& {log}
+		samtools view -h {input.bam} | egrep -v "XO:Z:(CT|CC|PM|PS|PI|PL|UT|HT|HM|CM|CC|UM)" | fix_adajacent_N_I_cigar_ops.pl | picardtools FixMateInformation I=/dev/stdin O={output.bam} CREATE_INDEX=true  TMP_DIR={TMP_DIR} SO=coordinate) >& {log}
 		"""
 
 # this command subsets reads based on target regions
@@ -319,7 +319,7 @@ rule run_GATK_SubsetTargetRegion_PrintReads:
 		"""
 		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx2g"
 		GATK -T PrintReads -R {params.reference} -I {input.bam} -o {output.bam} {params.target_region}
-		picardtools BuildBamIndex I={output.bam} VALIDATION_STRINGENCY=SILENT TMP_DIR={TMP_DIR}) >& {log}	
+		picardtools BuildBamIndex I={output.bam}  TMP_DIR={TMP_DIR}) >& {log}	
 		"""
 
 # checks the integrity of the VCF files provided for recalibration
