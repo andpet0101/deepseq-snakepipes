@@ -183,7 +183,6 @@ if 'PYTHONPATH' in os.environ:
     os.environ['PYTHONPATH'] = "/group/sequencing/Bfx/scripts/common/dsp/dsp/src/:" + os.environ['PYTHONPATH']
 else:
     os.environ['PYTHONPATH'] = "/group/sequencing/Bfx/scripts/common/dsp/dsp/src/"
-os.environ['R_LIBS_USER']='/share/apps/R/3.3.0/lib64/R/library'
 
 ##############################
 # names, basenames and files #

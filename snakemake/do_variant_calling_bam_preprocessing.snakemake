@@ -262,7 +262,7 @@ rule run_MarkDuplicates:
 		"\n\t\t("+module_load("picard_tools")+
 		"""
 		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx8g -XX:-UseGCOverheadLimit"
-		picardtools MarkDuplicates I={input.bam} O={output.bam} M={output.csv} REMOVE_DUPLICATES=false CREATE_INDEX=true TAGGING_POLICY=All TMP_DIR={TMP_DIR} ) >& {log}
+		picardtools MarkDuplicatesWithMateCigar I={input.bam} O={output.bam} M={output.csv} REMOVE_DUPLICATES=false CREATE_INDEX=true TMP_DIR={TMP_DIR} ) >& {log}
 		"""
 
 # fixes the mate information in wgs/exome data
