@@ -1,0 +1,173 @@
+try:
+  GENERAL_SETTINGS_INCLUDED
+except NameError: 
+  include: "general_settings_newbcl2fastq.snakemake"
+
+#PIPEIDS = bcl_cfg.keys()
+FCID = [i for i in fcdict.keys()]
+PIPETARGETS, SEQDONE, CHANGEOWNER, TEMP, TEMP2, ENC, ENC2 = [], [], [], [], [], [], []
+
+for fc in fcdict:
+  SEQDONE.append(os.path.join(fq_storage, fc, 'log/cp_sequencingstats.done'))
+  CHANGEOWNER.append(os.path.join(fq_storage, fc, 'log/change_owner.done'))
+  TEMP.append(os.path.join(fq_storage, fc, 'log/fastqc.done'))
+  TEMP2.append(os.path.join(fq_storage, fc, 'log/fq_into_db.done'))
+  for csv in fcdict[fc]['csvrun']:
+    PIPETARGETS.append(os.path.join(fcdict[fc]['pipelinepath'], csv, 'bcl2fastq.done'))
+  if 'encrypt' in fcdict[fc].keys():
+    for client in fcdict[fc]['encrypt']:
+      ENC.append(os.path.join(fq_storage, fc, 'log/', client+'_encrypt.done'))
+    ENC2.append(os.path.join(fq_storage, fc, 'log/db_enc.done'))
+
+localrules: run_fqtransport, do_all
+
+shell.prefix("set -euf -o pipefail;")
+
+rule do_all:
+  input:
+    PIPETARGETS,
+    CHANGEOWNER,
+    ENC,
+    ENC2,
+    SEQDONE
+  shell:
+    """
+    #module load apps/python/2.7.8
+    #export PYTHONPATH=/group/sequencing/Bfx/scripts/common/dsp/dsp/src
+    #/group/sequencing/Bfx/scripts/common/doDemultiplex.py -m f
+    export PYTHONPATH=/group/sequencing/Bfx/scripts/mathias/Support/
+    module switch apps/python3/3.4.2 apps/python3/3.6.4
+    python3 /group/sequencing/Bfx/scripts/mathias/Support/illumina/prepare_illumina.py finish -c {cfile} -s cmcb
+    """
+
+rule run_bcl2fastq:
+  output:
+    done = pipelinefolder+'{fcid}/{csvid}/bcl2fastq.done'
+  log:
+    fq_storage+'{fcid}/stats/{csvid}/nohup.out'
+  params:
+    csvpath = lambda wildcards: fcdict[wildcards.fcid]['csvrun'][wildcards.csvid]['csvpath'],
+    mismatchstring = lambda wildcards: fcdict[wildcards.fcid]['csvrun'][wildcards.csvid]['mismatches'],
+    additionalstring = lambda wildcards: fcdict[wildcards.fcid]['csvrun'][wildcards.csvid]['additional'],
+    basesmaskstring = lambda wildcards: fcdict[wildcards.fcid]['csvrun'][wildcards.csvid]['basesmask'],
+    rawpath = lambda wildcards: fcdict[wildcards.fcid]['rawfolder'],
+    pipepath = lambda wildcards: fcdict[wildcards.fcid]['pipelinepath']
+  shell:
+    """
+    module load apps/bcl2fastq/{bcl2fastqversion}
+    bcl2fastq -R {params.rawpath} --interop-dir {fq_storage}{wildcards.fcid}/stats/{wildcards.csvid}/InterOp --sample-sheet {params.csvpath} -o {params.pipepath}/{wildcards.csvid} --stats-dir {fq_storage}{wildcards.fcid}/stats/{wildcards.csvid} --reports-dir {fq_storage}{wildcards.fcid}/stats/{wildcards.csvid}/reports --barcode-mismatches {params.mismatchstring} {params.basesmaskstring} {params.additionalstring} >& {log}
+    touch {output.done}
+    """
+
+rule run_fqtransport:
+  input:
+    lambda wildcards: expand(pipelinefolder+'{fcid}/{csvid}/bcl2fastq.done', fcid = wildcards.fcid, csvid = fcdict[wildcards.fcid]['csvrun'].keys())
+  output:
+    done = fq_storage+'{fcid}/log/transport_fq.done'
+  params:
+    pipepath = lambda wildcards: fcdict[wildcards.fcid]['pipelinepath']
+  shell:
+    """
+    module load apps/python/2.7.8
+    export PYTHONPATH=/group/sequencing/Bfx/scripts/common/dsp/dsp/src
+    python2 /group/sequencing/Bfx/scripts/common/transport_fqfiles.py -d {params.pipepath} -o {fq_storage}{wildcards.fcid} -q "s"{wildcards.fcid}
+    while [ -n "$(qstat -j "s{wildcards.fcid}" 2> /dev/null)" ] ; do sleep 5 ; done
+    touch {output.done}
+    """
+
+rule run_fqintodatabase:
+  input:
+    lambda wildcards: expand(fq_storage+'{fcid}/log/transport_fq.done', fcid = wildcards.fcid)
+  output:
+    done = fq_storage+'{fcid}/log/fq_into_db.done'
+  threads:
+    12
+  shell:
+    """
+    export PYTHONPATH=/group/sequencing/Bfx/scripts/mathias/Support/
+    module switch apps/python3/3.4.2 apps/python3/3.6.4
+    python3 /group/sequencing/Bfx/scripts/mathias/Support/illumina/collect_illumina_stats.py collect -b {bcl2fastqversion} -m -c 12 -f  {fq_storage}{wildcards.fcid} -s cmcb -d
+    touch {output.done}
+    """
+
+rule run_encrypt:
+  input:
+    lambda wildcards: expand(fq_storage+'{fcid}/log/fq_into_db.done', fcid = wildcards.fcid)
+  output:
+    done = fq_storage+'{fcid}/log/{clientid}_encrypt.done'
+  params:
+    clientpath = lambda wildcards: fcdict[wildcards.fcid]['encrypt'][wildcards.clientid]['path'],
+    clientfiles = lambda wildcards: fcdict[wildcards.fcid]['encrypt'][wildcards.clientid]['files']
+  shell:
+    """
+    mkdir -p /projects/seq-work/fq_bak/{wildcards.fcid}/{wildcards.clientid}
+    openssl rand -hex -out {params.clientpath}"/data_access.txt" 32
+    #GPG_TTY=$(tty)
+    for i in {params.clientfiles}; do filename={params.clientpath}/${{i}}; gpg2 --batch --passphrase-file {params.clientpath}"/data_access.txt" --symmetric --cipher-algo aes256 ${{filename}} && mv ${{filename}} /projects/seq-work/fq_bak/{wildcards.fcid}/{wildcards.clientid}; done
+    #unset GPG_AGENT_INFO
+    gpg2 --yes --trust-model always --batch --homedir /group/sequencing/Bfx/gpg --encrypt --recipient 9D95BA40 --recipient ED4C5CDD {params.clientpath}"/data_access.txt" && mv {params.clientpath}"/data_access.txt" /projects/seq-work/fq_bak/{wildcards.fcid}/{wildcards.clientid}
+    touch {output.done}
+    """
+
+rule after_encrypt:
+  input:
+    lambda wildcards: expand(fq_storage+'{fcid}/log/{clientid}_encrypt.done', fcid = wildcards.fcid, clientid = fcdict[wildcards.fcid]['encrypt'].keys())
+  output:
+    done = fq_storage+'{fcid}/log/db_enc.done'
+  threads:
+    12
+  shell:
+    """
+    export PYTHONPATH=/group/sequencing/Bfx/scripts/mathias/Support/
+    module switch apps/python3/3.4.2 apps/python3/3.6.4
+    python3 /group/sequencing/Bfx/scripts/mathias/Support/illumina/collect_illumina_stats.py coll_encr -c 12 -f {fq_storage}{wildcards.fcid} -s cmcb -d
+    touch {output.done}
+    """   
+
+rule run_fastqcdemultiplex:
+  input:
+    lambda wildcards: expand(fq_storage+'{fcid}/log/transport_fq.done', fcid = wildcards.fcid)
+  output:
+    done = fq_storage+'{fcid}/log/fastqc.done'
+  log:
+    fq_storage+'{fcid}/log/fastqc.log'
+  threads:
+    8
+  shell:
+    """
+    module load apps/fastqc
+    mkdir -p {fq_storage}{wildcards.fcid}/fastqc
+    find {fq_storage}{wildcards.fcid} -type f -name "*fastq.gz" | xargs -L ${{NSLOTS:-{threads}}} fastqc -t ${{NSLOTS:-{threads}}} -a /group/sequencing/Bfx/scripts/common/dsp/dsp/files/fastqc_adapter.txt -o {fq_storage}{wildcards.fcid}/fastqc --nogroup >& {log}
+    touch {output.done}
+    """
+
+rule run_cpseqstats:
+  input:
+    lambda wildcards: expand(pipelinefolder+'{fcid}/{csvid}/bcl2fastq.done', fcid = wildcards.fcid, csvid = fcdict[wildcards.fcid]['csvrun'].keys())
+  output:
+    done = fq_storage+'{fcid}/log/cp_sequencingstats.done'
+  log:
+    fq_storage+'{fcid}/log/cp_sequencingstats.log'
+  params:
+    sequencing  = lambda wildcards: fcdict[wildcards.fcid]['machinepath']
+  shell:
+    """
+    export FQSTORAGE={fq_storage}
+    export RAWFOLDER={params.sequencing}
+    export STATFOLDER={params.sequencing}stats/
+    /group/sequencing/Bfx/scripts/common/cpSequencingStats.sh {wildcards.fcid} >& {log}
+    touch {output.done}
+    """
+
+rule run_chownership:
+  input:
+    fq_storage+'{fcid}/log/fq_into_db.done',
+    fq_storage+'{fcid}/log/fastqc.done'
+  output:
+    done = fq_storage+'{fcid}/log/change_owner.done'
+  shell:
+    """
+    touch {output.done}
+    find {fq_storage}{wildcards.fcid} -type d -exec chmod 770 {{}} \;
+    find {fq_storage}{wildcards.fcid} -type f -exec chmod 660 {{}} \;
+    """
