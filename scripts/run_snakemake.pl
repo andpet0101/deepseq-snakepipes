@@ -178,7 +178,7 @@ $cmd = "module load apps/snakemake || true;".$cmd;
 $cmd .= " --snakefile $snakefile";
 $cmd .= " --configfile $configfile" if($configfile);
 $cmd .= " --printshellcmds --dryrun" if($dryrun);
-$cmd .= " --timestamp ";
+#$cmd .= " --timestamp ";
 $cmd .= " --latency-wait 600 ";
 
 # if run on the submit node of biocluster3, run as cluster job 
@@ -192,12 +192,12 @@ if($host=~/^login-0-0/){
 	# use DRMAA for job control
 	if($use_drmaa){
 		$cmd = "export DRMAA_LIBRARY_PATH=".$ENV{'SGE_ROOT'}."/lib/linux-x64/libdrmaa.so;".$cmd;
-		$cmd .= " --drmaa \"-b n -o $logdir -e $logdir ";
+		$cmd .= " --drmaa \" -b n -o $logdir -e $logdir ";
 	}
 
 	# use qsub for job control, add a 'sleep 10' to give the queue a chance to update after each job
 	else{
-		$cmd .= " --cluster \"qsub -b n -o $logdir -e $logdir ";
+		$cmd .= " --cluster \" qsub -b n -o $logdir -e $logdir ";
 	}
 	$cmd .= " -q ngs.q ";
 
@@ -217,6 +217,9 @@ if($host=~/^login-0-0/){
 
 # number of jobs
 $cmd .= " --jobs $jobs";
+
+# restart failed jobs 3 times
+$cmd .= " --restart-times 3";
 
 # if we run jobs on a submit node then use at most 1 core in parallel; usually these jobs are either: 
 #   a) light-weight and do not take much time (then it does not matter) or 

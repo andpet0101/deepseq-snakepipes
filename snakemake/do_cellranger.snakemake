@@ -6,6 +6,7 @@ except NameError:
 import socket
 from os.path import basename
 from os.path import abspath
+from re import sub
 
 
 ####################
@@ -49,16 +50,34 @@ else:
 
 for s in SAMPLES:
     if s not in CELLRANGER_COUNT_CFG:
-        CELLRANGER_COUNT_CFG[s] = dict()
+        continue
     if "expect-cells" not in CELLRANGER_COUNT_CFG[s]:
         CELLRANGER_COUNT_CFG[s]["expect-cells"] = 3000
     if "chemistry" not in CELLRANGER_COUNT_CFG[s]:
-        CELLRANGER_COUNT_CFG[s]["chemistry"] = "auto"
+        CELLRANGER_COUNT_CFG[s]["chemistry"] = "threeprime"
 
+print("Chemistry will be set to 'threeprime' for 3'assay - for 5' assay set to 'fiveprime'\n")
 
 ## cellranger version - export if in config otherwise use latest version
 if PROGRAM_CFG and "cellranger" in PROGRAM_CFG:
     os.environ["CELLRANGER_VERSION"] = PROGRAM_CFG["cellranger"]
+    
+# info about rnaseqc is also needed for stats
+RNASEQC_CFG = config.get("rnaseqc",dict())
+if "gtf" not in RNASEQC_CFG:
+	if SPECIES and ANNOTATION_CFG and "version" in ANNOTATION_CFG and REFERENCE_CFG and "version" in REFERENCE_CFG:
+		RNASEQC_CFG["gtf"] = "/projects/seq-work/user/pipeline/rnaseqqc/"+SPECIES+"/"+REFERENCE_CFG["version"]+"/EnsemblGene-"+ANNOTATION_CFG["version"]+"."+REFERENCE_CFG["version"]+".TR.rnaseqqc.gtf"
+	else:
+		raise WorkflowError("Please provide an annotation file for RNA-SeQC either built-in via annotation.version plus reference.version plus species or as GTF file via rnaseqc.gtf!")
+if not os.path.exists(RNASEQC_CFG["gtf"]):
+	raise WorkflowError("Could not find the rnaseqc.gtf file "+RNASEQC_CFG["gtf"]+"!")
+if "rRNA_list" not in RNASEQC_CFG:
+	if SPECIES and REFERENCE_CFG and "version" in REFERENCE_CFG:
+		RNASEQC_CFG["rRNA_list"] = "/projects/seq-work/user/pipeline/rnaseqqc/"+SPECIES+"/"+REFERENCE_CFG["version"]+"/"+REFERENCE_CFG["version"]+".rRNA.rnaseqc.list"
+	else:
+		raise WorkflowError("Please provide an rRNA list file for RNA-SeQC either built-in via reference.version plus species or as rRNA list file via rnaseqc.rRNA_list!")
+if not os.path.exists(RNASEQC_CFG["rRNA_list"]):
+	raise WorkflowError("Could not find the rnaseqc.rRNA_list file "+RNASEQC_CFG["rRNA_list"]+"!")
 
 ###########
 # Targets #
@@ -78,7 +97,11 @@ for l in LIBRARIES:
     CELLRANGER_FASTQ[sm].append("cellranger/fastq/"+sm+"_"+lb+"_L001_I1_001.fastq.gz")
 
 CELLRANGER_FASTQ['all'] = ['cellranger/.1234'] # that is a dummy
-    
+
+# calculate complex stats?
+COMPLEX_STATS = True    
+
+
 
 #########
 # Rules #
@@ -91,11 +114,11 @@ ruleorder: run_cellranger_aggregate > run_cellranger_count
 
 rule do_all:
     input:
-        cellranger=["cellranger/"+s+"/cellranger.done" for s in SAMPLES]+(["cellranger/all/cellranger.done"] if len(SAMPLES)>1 else []),
-        publish=["cellranger/publish/"+PROJECT+"."+s+".zip" for s in SAMPLES]+(["cellranger/publish/"+PROJECT+".all.zip"] if len(SAMPLES)>1 else []),
-        html=["cellranger/publish/"+PROJECT+"."+s+".web_summary.html" for s in SAMPLES]+(["cellranger/publish/"+PROJECT+".all.web_summary.html"] if len(SAMPLES)>1 else []),
-        copy_metrics=["cellranger/publish/"+PROJECT+"."+s+".copy_metrics.sh" for s in SAMPLES]
-
+        cellranger=["cellranger/"+s+"/cellranger.done" for s in CELLRANGER_COUNT_CFG.keys()]+(["cellranger/all/cellranger.done"] if len(CELLRANGER_COUNT_CFG.keys())>1 else []),
+        publish=["cellranger/publish/"+PROJECT+"."+s+".zip" for s in CELLRANGER_COUNT_CFG.keys()]+(["cellranger/publish/"+PROJECT+".all.zip"] if len(CELLRANGER_COUNT_CFG.keys())>1 else []),
+        html=["cellranger/publish/"+PROJECT+"."+s+".web_summary.html" for s in CELLRANGER_COUNT_CFG.keys()]+(["cellranger/publish/"+PROJECT+".all.web_summary.html"] if len(CELLRANGER_COUNT_CFG.keys())>1 else []),
+        copy_metrics=["cellranger/publish/"+PROJECT+"."+s+".copy_metrics.sh" for s in CELLRANGER_COUNT_CFG.keys()],
+        complex_stats=["cellranger/"+s+"/outs/stats_by_cellbarcode.txt" for s in CELLRANGER_COUNT_CFG.keys() if COMPLEX_STATS]
 
 # copy metrics_summary.csv for each sample to our 10x stats directory, use sample id as name
 rule  create_copy_cellranger_metrics_summary_script:
@@ -141,6 +164,118 @@ rule zip_cellranger_results:
         """
         cd cellranger/publish/ && ln -s ../{wildcards.basename}/outs {params.project}.{wildcards.basename} && zip -9 -r - {params.project}.{wildcards.basename} -x "*possorted_genome_bam.bam*" > {params.project}.{wildcards.basename}.zip && rm {params.project}.{wildcards.basename} 
         """
+        
+# function simply gets the list of fofn files and returns it but with suffix .stats instead of fofn
+def return_batches_stats_files(wildcards):
+    batches_stats_files = []
+    with open(checkpoints.split_bam_into_cellbarcode_batches.get(sample=wildcards.sample).output[0]) as fp:
+        for line in fp:
+            batches_stats_files.append(sub('\.fofn','.stats',line.strip()))
+    return batches_stats_files
+
+# collect additional metrics by cell (3): distribute parts across cluster
+rule collect_stats_for_all_cellbarcodes:
+    input:
+        return_batches_stats_files
+    output:
+        raw="cellranger/{sample}/outs/stats_by_cellbarcode.txt",
+        rnaseqmetrics="cellranger/{sample}/outs/rnaseqmetrics_by_cellbarcode.csv",
+        rnaseqcoverage="cellranger/{sample}/outs/rnaseqcoverage_by_cellbarcode.csv",
+        alignmentsummarymetrics="cellranger/{sample}/outs/alignmentsummarymetrics_by_cellbarcode.csv",
+        umidistribution="cellranger/{sample}/outs/umidistribution_by_cellbarcode.csv"
+    log:
+        "cellranger/log/{sample}.collect_stats_for_all_cellbarcodes.log"
+    shell:
+        "\n\t\t("+module_load("R")+
+        """
+        cat {input} > {output.raw}
+        collect_tenx_batch_stats.R {output.raw} cellranger/{wildcards.sample}/outs/) >& {log}
+        """
+		
+rule collect_stats_for_cellbarcode_batch:
+    input:
+        fofn="cellranger/{sample}/outs/tmp/{batch}.fofn",
+        rrna_list="cellranger/{sample}/outs/tmp/rRNA.interval_list"
+    output:
+        stats="cellranger/{sample}/outs/tmp/{batch}.stats"
+    log:
+        "cellranger/log/{sample}.{batch}.collect_stats_for_cellbarcode_batch.log"
+    priority:
+        -1
+    params:
+        reference=CELLRANGER_CFG['reference_dir']+'/fasta/genome.fa',
+        annotation=sub("\.gtf",".refFlat",ANNOTATION_CFG["gtf"]),
+        adapter_seq="ADAPTER_SEQUENCE=AAGCAGTGGTATCAACGCAGAGTCGACTTT ADAPTER_SEQUENCE=AAGCAGTGGTATCAACGCAGAGTCGACGGG ADAPTER_SEQUENCE=GATCGGAAGAGCACACGTCTGAACTCCAGTCAC ADAPTER_SEQUENCE=ATCTCGTATGCCGTCTTCTGCTTG ADAPTER_SEQUENCE=TCTACACTCTTTCCCTACACGACGCTCTTCCGATCT ADAPTER_SEQUENCE=AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGTAGA",
+        assay=lambda wildcards: "3p" if CELLRANGER_COUNT_CFG[wildcards.sample]["chemistry"] == "threeprime" else "5p",
+        gather_strand=lambda wildcards: "SENSE" if CELLRANGER_COUNT_CFG[wildcards.sample]["chemistry"] == "threeprime" else "ANTISENSE",
+        picard_strand=lambda wildcards: "FIRST_READ_TRANSCRIPTION_STRAND" if CELLRANGER_COUNT_CFG[wildcards.sample]["chemistry"] == "threeprime" else "SECOND_READ_TRANSCRIPTION_STRAND"
+    shell:
+        "\n\t\t("+module_load("samtools","picard_tools")+
+        """
+        export JAVA_OPTIONS="-Xmx50G"
+        echo > {output.stats}
+        for b in $(cat {input.fofn})
+        do
+          make_tenx_bam_dropseqtools_compatible.pl $b $b.mod.bam {params.assay}
+          /group/sequencing/Bfx/scripts/extern/Drop-seq_tools-2.3.0/ConvertTagToReadGroup I=$b.mod.bam O=$b.mod.rg.bam CELL_BARCODE_TAG=CB READ_MQ=0 SAMPLE_NAME=cb NUM_CORE_BARCODES=1000000 TMP_DIR=/tmp
+          echo "# picard.analysis.GatherMolecularBarcodeDistributionByGene" >> {output.stats}
+          /group/sequencing/Bfx/scripts/extern/Drop-seq_tools-2.3.0/GatherMolecularBarcodeDistributionByGene I=$b.mod.rg.bam O=/dev/stdout CELL_BARCODE_TAG=CB MOLECULAR_BARCODE_TAG=UB EDIT_DISTANCE=0 READ_MQ=255 NUM_CORE_BARCODES=1000000 LOCUS_FUNCTION_LIST=UTR STRAND_STRATEGY={params.gather_strand} TMP_DIR=/tmp | awk '{{print}}' >> {output.stats}
+          picardtools CollectRnaSeqMetrics MINIMUM_LENGTH=300 I=$b.mod.rg.bam REF_FLAT={params.annotation} O=/dev/stdout LEVEL=SAMPLE STRAND={params.picard_strand} RIBOSOMAL_INTERVALS={input.rrna_list} |  awk '{{print}}' >> {output.stats}
+          picardtools CollectAlignmentSummaryMetrics I=$b.mod.rg.bam O=/dev/stdout R={params.reference} LEVEL=SAMPLE  ADAPTER_SEQUENCE={params.adapter_seq}  | awk '{{print}}' >> {output.stats}
+          echo "# Done" >> {output.raw}
+          echo "# End" >> {output.raw}
+          rm $b.mod.bam $b.mod.rg.bam 
+        done) >& {log}
+        """
+        
+# collect additional metrics by cell (2): split bam into small manageable batches
+checkpoint split_bam_into_cellbarcode_batches:
+    input:
+        sorted="cellranger/{sample}/outs/tmp/cbcsorted_genome_bam.bam"
+    output:
+        list="cellranger/{sample}/outs/tmp/list_of_batches"
+    log:
+        "cellranger/log/{sample}.split_bam_into_cellbarcode_batches.log"
+    priority:
+        -1
+    shell:
+        "\n\t\t("+module_load("samtools","perl")+
+        """
+        split_tenx_bam_into_cbc_batches.pl {input.sorted} cellranger/{wildcards.sample}/outs/tmp/ > {output.list}) >& {log}
+        """
+        
+# prepare rrna interval file - this must be specific for the sequence dictionary of the bam
+rule prepare_rrna_interval_file:
+    input:
+        bam="cellranger/{sample}/outs/tmp/cbcsorted_genome_bam.bam"
+    output:
+        file="cellranger/{sample}/outs/tmp/rRNA.interval_list"
+    params:
+        ribosomal_intervals=RNASEQC_CFG["rRNA_list"]
+    log:
+        "cellranger/log/{sample}.prepare_rrna_interval_file.log"
+    shell:
+        "\n\t\t("+module_load("samtools")+
+        """
+        samtools view -H {input.bam} | egrep "HD|SQ" > {output}
+        cat {params.ribosomal_intervals} | grep  ":" | perl -pe 's/[:-]/ /g' | awk '{{OFS="\t";print $1,$2,$3,"+","."}}' >> {output}) >& {log}
+        """
+        
+# collect additional metrics by cell (1): sort bam by cell barcode
+rule sort_bam_by_cellbarcode:
+    input:
+        done="cellranger/{sample}/cellranger.done"
+    output:
+        sorted="cellranger/{sample}/outs/tmp/cbcsorted_genome_bam.bam"
+    log:
+        "cellranger/log/{sample}.sort_bam_by_cellbarcode.log"
+    priority:
+        -1
+    shell:
+        "\n\t\t("+module_load("samtools")+
+        """
+        samtools view -u -F 256 cellranger/{wildcards.sample}/outs/possorted_genome_bam.bam | samtools sort -l 1 -@ 12 -m 2G -o {output.sorted} -T /tmp/{wildcards.sample}.cbcsorted_genome_bam  -t CB -) >& {log}
+        """
 
 # runs cellranger aggr
 rule run_cellranger_aggregate:
@@ -169,16 +304,16 @@ rule prepare_cellranger_aggregate_csv:
     run:
         with open(output[0], 'w') as out:
             out.write("library_id,molecule_h5\n")
-            for s in SAMPLES:
+            for s in CELLRANGER_COUNT_CFG.keys():
                 out.write(s+","+s+"/outs/molecule_info.h5\n")
 
 
 # runs cellranger count
 rule run_cellranger_count:
     input:
-        "cellranger/{sample}/all_fastqs_prepared.done"
+        done="cellranger/{sample}/all_fastqs_prepared.done"
     output:
-        "cellranger/{sample}/cellranger.done"
+        done="cellranger/{sample}/cellranger.done"
     log:
         "cellranger/log/{sample}.cellranger_count.log"
     params:

@@ -44,7 +44,7 @@ die "$script: If you use '!' for the UMI, then you have to provide a cutadapt in
 die "$script: Could not find the cutadapt info file!" if($cutadapt_info && !-e $cutadapt_info);
 
 # parse the UMI position specification
-@umi_trim_spec = split(/[;]/,$umi_trim_spec);
+@umi_trim_spec = split(/[-]/,$umi_trim_spec);
 if($umi_trim_spec[0]=~/^(\d+)(!?),(\d+)(!?)$/){
 	push(@umi_len,$1,$3);
 	push(@adapter_required,$2,$4);
@@ -127,7 +127,7 @@ while(@fqs = read_fastq_records($fhin1,$fhin2)){
 			
 			# read 2 - sequence and quality
 			$trimmed_seq = $fqs[1]->[1];
-			$trimmed_seq = $fqs[1]->[3];
+			$trimmed_qual = $fqs[1]->[3];
 
 			if($umi_len[2]+$umi_len[3]>0 && $umi_len[2]+$umi_len[3]<length($trimmed_seq)){
 				# last nts of read 2

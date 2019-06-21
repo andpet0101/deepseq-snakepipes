@@ -185,5 +185,22 @@
 	{
 		"runtime" : "96:00:00",
 		"memory" : "16G"	
+	},
+	"collect_stats_for_cellbarcode_batch" :
+	{
+		"runtime" : "12:00:00",
+		"memory" : "60G"	
+	},
+	"sort_bam_by_cellbarcode" :
+	{
+		"runtime" : "24:00:00",
+		"memory" : "26G",
+		"cpu" : "12-20"			
+	},
+	"split_bam_into_cellbarcode_batches" :
+	{
+		"runtime" : "48:00:00",
+		"memory" : "16G",
+		"cpu" : "16-20"	
 	}
 }

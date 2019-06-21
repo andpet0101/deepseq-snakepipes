@@ -32,6 +32,10 @@ if "target_regions_bed" in VARIANT_CALLING_CFG:
 else:
 	VARIANT_CALLING_CFG["target_regions_bed"] = ""
 
+# distance between optical duplicates; set to 100 by default; set to 2500 for patterned flowcells
+if "markdup_optical_distance" not in VARIANT_CALLING_CFG:
+	VARIANT_CALLING_CFG["markdup_optical_distance"] = 100
+
 ###########
 # Targets #
 ###########
@@ -258,11 +262,13 @@ rule run_MarkDuplicates:
 		csv="{aligner}/report/data/{basename}.markdup.txt"
 	log:
 		"{aligner}/log/{basename}.markdup.log"
+	params:
+		optical_distance=VARIANT_CALLING_CFG["markdup_optical_distance"]
 	shell:
 		"\n\t\t("+module_load("picard_tools")+
 		"""
 		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx8g -XX:-UseGCOverheadLimit"
-		picardtools MarkDuplicatesWithMateCigar I={input.bam} O={output.bam} M={output.csv} REMOVE_DUPLICATES=false CREATE_INDEX=true TMP_DIR={TMP_DIR} ) >& {log}
+		picardtools MarkDuplicatesWithMateCigar I={input.bam} O={output.bam} M={output.csv} OPTICAL_DUPLICATE_PIXEL_DISTANCE={params.optical_distance} REMOVE_DUPLICATES=false CREATE_INDEX=true TMP_DIR={TMP_DIR} ) >& {log}
 		"""
 
 # fixes the mate information in wgs/exome data

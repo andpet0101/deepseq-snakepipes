@@ -13,7 +13,8 @@ CLEAN_DATA_RECIPES["WGS"] = "-q 5 -m 20 -a truseq=AGATCGGAAGAGC"
 CLEAN_DATA_RECIPES["RNAseq"] = "-q 5 -m 20 -a truseq=AGATCGGAAGAGC"
 CLEAN_DATA_RECIPES["WGS_paired"] = "-q 5 -m 20 -a truseq1=AGATCGGAAGAGC -A truseq2=AGATCGGAAGAGC"
 CLEAN_DATA_RECIPES["RNAseq_paired"] = "-q 5 -m 20 -a truseq1=AGATCGGAAGAGC -A truseq2=AGATCGGAAGAGC"
-CLEAN_DATA_RECIPES["miRNA"] = "--trim-n -m 18 -q 10 -O 12 -n 2 --discard-untrimmed -a neb1=AGATCGGAAGAGCACACGTCT -a truseq_seqmatic_nextflex1=TGGAATTCTCGGGTGCCAAGG -a neb2=AGATCGGAAGAG -a truseq_seqmatic_nextflex2=TGGAATTCTCGG"
+CLEAN_DATA_RECIPES["miRNA"] = "--trim-n -m 18 -q 10 -O 12 -n 2 --discard-untrimmed -a truseq_seqmatic_nextflex_5p_1=TGGAATTCTCGGGTGCCAAGG -a truseq_seqmatic_nextflex_5p_2=TGGAATTCTCGG"
+CLEAN_DATA_RECIPES["miRNA_paired"] = "--trim-n -m 18 -q 10 -O 12 -n 2 --discard-untrimmed --pair-filter=both -a truseq_seqmatic_nextflex_5p_1=TGGAATTCTCGGGTGCCAAGG -A truseq_seqmatic_nextflex_3p_1=GATCGTCGGACTGTAGAACTC -a truseq_seqmatic_nextflex_5p_2=TGGAATTCTCGG -A truseq_seqmatic_nextflex_3p_2=GATCGTCGGACT"
 CLEAN_DATA_RECIPES["damID"] = "--trim-n -m 20 -n 2 -g ^GGTCGCGGCCGAGGATC -g CGCGGCCGAGGATC -a GATCCTCGGCCGCGACC -e 0.15"
 CLEAN_DATA_RECIPES["gecko"] = "-a a1=GTTTTAGAGCTAGAAATAGC -O 20 -e 0.05 --trimmed-only -g g1=GTGGAAAGGACGAAACACCG -g g2=GTGGAAAGGACGAAACACCT -g g3=GTGGAAAGGACGAAACACCC -m 19 -n 2"
 CLEAN_DATA_RECIPES["none"] = " "
@@ -129,7 +130,7 @@ rule record_umi_in_fastq_single:
 	shell:
 		"\n\t\t("+module_load("perl")+
 		"""
-		record_umi_from_fastq.pl --fqin1 {input.fq} --fqout1 {output.fq} --umi_distribution {output.dist} --umi_spec {CLEAN_DATA_CFG[umi_trim]} --umi_libs {CLEAN_DATA_CFG[umi_libs]} --min_len 18 > {output.summary}) >& {log}
+		record_umi_from_fastq.pl --fqin1 {input.fq} --fqout1 {output.fq} --umi_distribution {output.dist} --umi_spec '{CLEAN_DATA_CFG[umi_trim]}' --umi_libs {CLEAN_DATA_CFG[umi_libs]} --min_len 18 > {output.summary}) >& {log}
 		"""
 
 rule record_umi_in_fastq_paired:
@@ -146,7 +147,7 @@ rule record_umi_in_fastq_paired:
 	shell:
 		"\n\t\t("+module_load("perl")+
 		"""
-		record_umi_from_fastq.pl --fqin1 {input.fq1} --fqin2 {input.fq2} --fqout1 {output.fq1} {output.fq2} --umi_distribution {output.dist} --umi_spec {CLEAN_DATA_CFG[umi_trim]} --umi_libs {CLEAN_DATA_CFG[umi_libs]} --min_len 18 > {output.summary}) >& {log}
+		record_umi_from_fastq.pl --fqin1 {input.fq1} --fqin2 {input.fq2} --fqout1 {output.fq1} --fqout2 {output.fq2} --umi_distribution {output.dist} --umi_spec '{CLEAN_DATA_CFG[umi_trim]}' --umi_libs {CLEAN_DATA_CFG[umi_libs]} --min_len 18 > {output.summary}) >& {log}
 		"""
 
 rule run_cutadapt_single:
@@ -178,5 +179,6 @@ rule run_cutadapt_paired:
 	shell:
 		"\n\t\t("+module_load("cutadapt")+
 		"""
-		cutadapt {CLEAN_DATA_CFG[parameter]} -o {output.fq1} -p {output.fq2} --info-file={output.csv} {input.fq1} {input.fq2} > {output.summary}) >& {log}
+		cutadapt {CLEAN_DATA_CFG[parameter]} -o {output.fq1} -p {output.fq2} {input.fq1} {input.fq2} > {output.summary}) >& {log}
+		echo 'Not supported in paired-end mode' | gzip -c > {output.csv}
 		"""
