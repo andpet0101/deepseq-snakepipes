@@ -1,0 +1,96 @@
+import time
+import glob
+import os
+import re
+import csv
+import collections
+import functools
+import os.path
+
+
+def build_files(csvfilename, single = 1):
+  start = False
+  direction = ('_R1.fastq.gz', '_R2.fastq.gz', '_R3.fastq.gz')
+  temp = []
+  with open(csvfilename, 'r') as filein:
+    for line in filein:
+      if start:
+        lib = line.split(',')[0]
+        if single == 1:
+          temp.append('{0}{1}'.format(lib, direction[0]))
+        if single == 2:
+          temp.extend(['{0}{1}'.format(lib, i) for i in direction[:2]])
+        else:
+          temp.extend(['{0}{1}'.format(lib, i) for i in direction])
+      
+      if line.startswith('Sample_ID'):
+        start = True
+  return temp
+
+
+###
+# config file is now static and can be in YML or JSON format #
+###
+if os.path.exists("snakemake_config_bcl2fastq.yml"):
+	configfile: "snakemake_config_bcl2fastq.yml"
+elif os.path.exists("snakemake_config_bcl2fastq.json"):
+	configfile: "snakemake_config_bcl2fastq.json"
+else:
+	raise WorkflowError("Could not find the configuration file (snakemake_config_bcl2fastq.yml/snakemake_config_bcl2fastq.json) located in this directory!")
+
+if os.path.exists("snakemake_config_bcl2fastq.yml"):
+	config['configfile'] = os.path.abspath("snakemake_config_bcl2fastq.yml")
+elif os.path.exists("snakemake_config_bcl2fastq.json"):
+	config['configfile'] = os.path.abspath("snakemake_config_bcl2fastq.json")
+cfile = config.get('configfile', '')
+
+###
+# parameters from the snakemake config and checks #
+###
+# bcl2fastqversion #
+bcl2fastqversion = config.get('bcl2fastqversion', '')
+if not bcl2fastqversion: raise WorkflowError("Please provide bcl2fastq version for module load")
+
+# fq_storage #
+fq_storage = config.get("fq_storage","")
+if not fq_storage: raise WorkflowError("Please provide a valid fq-storage folder!")
+
+# pipelining #
+pipelinefolder = config.get("pipelining","")
+if not pipelinefolder: raise WorkflowError("Please provide a valid pipelining folder!")
+
+# site #
+site = config.get('site')
+if not pipelinefolder: raise WorkflowError("Please provide a valid processing site")
+
+# bcl jobs #
+#keys have to be the name of the csv files without the csv
+fcdict = config.get('fc',dict())
+
+
+if fcdict:
+  for fc in fcdict:
+    if not os.path.exists(fcdict[fc]['rawfolder']): raise WorkflowError('{0} - Raw folder not exisiting'.format(fcdict[fc]['rawfolder']))
+    fcdict[fc]['pipelinepath'] = os.path.join(pipelinefolder, fc)
+    fcdict[fc]['machinepath'] = fcdict[fc]['rawfolder'].rstrip(os.sep).replace(fc, '')
+
+    if not os.path.exists(fcdict[fc]['samplesheethome']): raise WorkflowError('{0} - Samplesheet directory does not exist: {1}'.format(fc, samplesheethome))
+    
+    csvrun = fcdict[fc]['csvrun']
+    if not csvrun: raise WorkflowError("Please provide entries for the Samplesheet files!")
+
+    for csv in csvrun:
+      csvpath = os.path.join(fcdict[fc]['samplesheethome'], '.'.join((csv, 'csv')))
+      if not os.path.isfile(csvpath): raise WorkflowError('{0} - Samplesheet does not exist: {1}'.format(fc, csvpath))
+    
+      fcdict[fc]['csvrun'][csv]['csvpath'] = csvpath
+      fcdict[fc]['csvrun'][csv]['basesmask'] = ' '.join(['--use-bases-mask {0}'.format(i) for i in fcdict[fc]['csvrun'][csv]['basesmask'].split(';')])
+      fcdict[fc]['csvrun'][csv]['finalfiles'] = build_files(csvpath, fcdict[fc]['reads'])
+      if not 'additional' in fcdict[fc]['csvrun'][csv]: fcdict[fc]['csvrun'][csv]['additional'] = ' '
+
+    if 'encrypt' in fcdict[fc].keys():
+      for client in fcdict[fc]['encrypt']:
+        fcdict[fc]['encrypt'][client]['clientname'] = client
+        fcdict[fc]['encrypt'][client]['path'] = os.path.join(fq_storage, fc, client)
+        fcdict[fc]['encrypt'][client]['files'] = ' '.join(fcdict[fc]['encrypt'][client]['files'].split(','))
+
