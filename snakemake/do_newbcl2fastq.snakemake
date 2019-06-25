@@ -84,9 +84,9 @@ rule run_fqintodatabase:
     12
   shell:
     """
-    export PYTHONPATH=/group/sequencing/Bfx/scripts/mathias/Support/
+    export PYTHONPATH=/group/sequencing/Bfx/scripts/common/maintainer/maintainer/src
     module switch apps/python3/3.4.2 apps/python3/3.6.4
-    python3 /group/sequencing/Bfx/scripts/mathias/Support/illumina/collect_illumina_stats.py collect -b {bcl2fastqversion} -m -c 12 -f  {fq_storage}{wildcards.fcid} -s cmcb -d
+    python3 /group/sequencing/Bfx/scripts/common/maintainer/maintainer/src/illumina/collect_illumina_stats.py collect -b {bcl2fastqversion} -m -c 12 -f  {fq_storage}{wildcards.fcid} -s cmcb -d
     touch {output.done}
     """
 
@@ -100,12 +100,12 @@ rule run_encrypt:
     clientfiles = lambda wildcards: fcdict[wildcards.fcid]['encrypt'][wildcards.clientid]['files']
   shell:
     """
-    mkdir -p /projects/seq-work/fq_bak/{wildcards.fcid}/{wildcards.clientid}
+    mkdir -p /projects/seq-work/unencrypted/illumina/{wildcards.fcid}/{wildcards.clientid}
     openssl rand -hex -out {params.clientpath}"/data_access.txt" 32
     #GPG_TTY=$(tty)
-    for i in {params.clientfiles}; do filename={params.clientpath}/${{i}}; gpg2 --batch --passphrase-file {params.clientpath}"/data_access.txt" --symmetric --cipher-algo aes256 ${{filename}} && mv ${{filename}} /projects/seq-work/fq_bak/{wildcards.fcid}/{wildcards.clientid}; done
+    for i in {params.clientfiles}; do filename={params.clientpath}/${{i}}; gpg2 --batch --passphrase-file {params.clientpath}"/data_access.txt" --symmetric --cipher-algo aes256 ${{filename}} && mv ${{filename}} /projects/seq-work/unencrypted/illumina/{wildcards.fcid}/{wildcards.clientid}; done
     #unset GPG_AGENT_INFO
-    gpg2 --yes --trust-model always --batch --homedir /group/sequencing/Bfx/gpg --encrypt --recipient 9D95BA40 --recipient ED4C5CDD {params.clientpath}"/data_access.txt" && mv {params.clientpath}"/data_access.txt" /projects/seq-work/fq_bak/{wildcards.fcid}/{wildcards.clientid}
+    gpg2 --yes --trust-model always --batch --homedir /group/sequencing/Bfx/gpg_v20 --encrypt --recipient 66553E18A69FDACA --recipient 8F2E121391F0D008 --recipient 0DD40AE74A216992 {params.clientpath}"/data_access.txt" && mv {params.clientpath}"/data_access.txt" /projects/seq-work/unencrypted/illumina/{wildcards.fcid}/{wildcards.clientid}
     touch {output.done}
     """
 
@@ -118,9 +118,9 @@ rule after_encrypt:
     12
   shell:
     """
-    export PYTHONPATH=/group/sequencing/Bfx/scripts/mathias/Support/
+    export PYTHONPATH=/group/sequencing/Bfx/scripts/common/maintainer/maintainer/src
     module switch apps/python3/3.4.2 apps/python3/3.6.4
-    python3 /group/sequencing/Bfx/scripts/mathias/Support/illumina/collect_illumina_stats.py coll_encr -c 12 -f {fq_storage}{wildcards.fcid} -s cmcb -d
+    python3 /group/sequencing/Bfx/scripts/common/maintainer/maintainer/src/illumina/collect_illumina_stats.py coll_encr -c 12 -f {fq_storage}{wildcards.fcid} -s cmcb -d
     touch {output.done}
     """   
 
