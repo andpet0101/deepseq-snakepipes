@@ -189,7 +189,7 @@ rule collect_stats_for_all_cellbarcodes:
         "\n\t\t("+module_load("R")+
         """
         cat {input} > {output.raw}
-        collect_tenx_batch_stats.R {output.raw} cellranger/{wildcards.sample}/outs/) >& {log}
+        collect_tenx_batch_stats.R cellranger/{wildcards.sample}/outs/ {input}) >& {log}
         """
 		
 rule collect_stats_for_cellbarcode_batch:
@@ -222,8 +222,8 @@ rule collect_stats_for_cellbarcode_batch:
           /group/sequencing/Bfx/scripts/extern/Drop-seq_tools-2.3.0/GatherMolecularBarcodeDistributionByGene I=$b.mod.rg.bam O=/dev/stdout CELL_BARCODE_TAG=CB MOLECULAR_BARCODE_TAG=UB EDIT_DISTANCE=0 READ_MQ=255 NUM_CORE_BARCODES=1000000 LOCUS_FUNCTION_LIST=UTR STRAND_STRATEGY={params.gather_strand} TMP_DIR=/tmp | awk '{{print}}' >> {output.stats}
           picardtools CollectRnaSeqMetrics MINIMUM_LENGTH=300 I=$b.mod.rg.bam REF_FLAT={params.annotation} O=/dev/stdout LEVEL=SAMPLE STRAND={params.picard_strand} RIBOSOMAL_INTERVALS={input.rrna_list} |  awk '{{print}}' >> {output.stats}
           picardtools CollectAlignmentSummaryMetrics I=$b.mod.rg.bam O=/dev/stdout R={params.reference} LEVEL=SAMPLE  ADAPTER_SEQUENCE={params.adapter_seq}  | awk '{{print}}' >> {output.stats}
-          echo "# Done" >> {output.raw}
-          echo "# End" >> {output.raw}
+          echo "# Done" >> {output.stats}
+          echo "# End" >> {output.stats}
           rm $b.mod.bam $b.mod.rg.bam 
         done) >& {log}
         """

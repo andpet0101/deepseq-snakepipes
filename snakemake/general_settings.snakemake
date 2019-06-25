@@ -225,7 +225,7 @@ SAMPLES = INPUT_CFG["samples"]
 
 # function that loads specific versions of programs via the module system
 def module_load(*modules):
-	module_str = "module load"
+	module_str = "module unload apps/python3 apps/snakemake && module load"
 	for m in list(modules):
 		module_str += " apps/"+m
 		if m in PROGRAM_CFG:
