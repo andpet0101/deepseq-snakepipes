@@ -314,7 +314,7 @@ rule get_known_miRNA_gff:
 
 rule link_mirdeep_star_directories:
 	input:
-		genome_dir=MIRDEEP_STAR_CFG["genome_dir"]+SPECIES,
+		genome_dir=MIRDEEP_STAR_CFG["genome_dir"],
 		targetscan_dir="/group/sequencing/Bfx/scripts/extern/mirdeep_star/targetScan"
 	output:
 		genome_dir="genome",
