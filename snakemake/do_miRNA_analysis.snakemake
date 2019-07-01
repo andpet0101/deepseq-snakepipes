@@ -317,8 +317,8 @@ rule link_mirdeep_star_directories:
 		genome_dir=MIRDEEP_STAR_CFG["genome_dir"],
 		targetscan_dir="/group/sequencing/Bfx/scripts/extern/mirdeep_star/targetScan"
 	output:
-		genome_dir="genome",
-		targetscan_dir="targetScan",
+		genome_dir=directory("genome"),
+		targetscan_dir=directory("targetScan"),
 	shell:
 		"""
 		ln -snf {input.genome_dir} {output.genome_dir}
