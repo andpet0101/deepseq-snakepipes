@@ -117,8 +117,8 @@ rule parse_mirdeep_star_results:
 rule run_mirdeep_star:
 	input:
 		bam="miRNA/{basename}.filtered.bam",
-		genome_dir="genome",
-		targetscan_dir="targetScan"
+		genome_dir=ancient("genome"),
+		targetscan_dir=ancient("targetScan")
 	output:
 		all="miRNA/{basename}.filtered.result.gz",
 		cluster=temp("miRNA/{basename}.filtered.cluster"),

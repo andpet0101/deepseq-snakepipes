@@ -395,7 +395,7 @@ rule run_GATK_VariantRecalibrator_snp:
 		"""
 		export JAVA_OPTIONS="-Djava.io.tmpdir={TMP_DIR} -Xmx12G"
 		GATK -T VariantRecalibrator -R {params.reference} -input {input.vcf} -recalFile {output.recal} -tranchesFile {output.tranches} -rscriptFile gatk/report/pdf/DNAseq_SNVs.snp.recal.R  \
-		-resource:{params.resource_string} -an DP -an QD -an FS -an SOR -an MQ -an MQRankSum -an ReadPosRankSum -mode SNP --maxGaussians 4  -tranche 100.0 -tranche 99.9 -tranche 99.0 -tranche 90.0) >& {log}
+		-resource:{params.resource_string} -an DP -an QD -an FS -an SOR  -an MQRankSum -an ReadPosRankSum -mode SNP --maxGaussians 4  -tranche 100.0 -tranche 99.9 -tranche 99.0 -tranche 90.0) >& {log}
 		mv gatk/report/pdf/DNAseq_SNVs.snp.recal.R.pdf {output.plot}
 		"""
 
