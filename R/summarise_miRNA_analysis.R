@@ -416,7 +416,7 @@ mirdeep_star_table_novel = merge(mirdeep_star_table_novel,as.data.frame(novel_mi
 
 # c) collapse original data frame by group and output a table for novel miRNAs
 novel_miRNAs_table = mirdeep_star_table_novel %>% group_by(group) %>%
-summarise(type=dyplr::first(type),
+summarise(type=dplyr::first(type),
 	chr=dplyr::first(chr),
 	start=dplyr::first(start),
 	end=dplyr::first(end),
