@@ -313,7 +313,7 @@ rule get_known_miRNA_gff:
 		"""
 
 rule link_mirdeep_star_directories:
-	input:
+	params:
 		genome_dir=MIRDEEP_STAR_CFG["genome_dir"],
 		targetscan_dir="/group/sequencing/Bfx/scripts/extern/mirdeep_star/targetScan"
 	output:
@@ -321,7 +321,7 @@ rule link_mirdeep_star_directories:
 		targetscan_dir=directory("targetScan"),
 	shell:
 		"""
-		ln -snf {input.genome_dir} {output.genome_dir}
-		ln -snf {input.targetscan_dir} {output.targetscan_dir}
+		ln -snf {params.genome_dir} {output.genome_dir}
+		ln -snf {params.targetscan_dir} {output.targetscan_dir}
 		"""	
 
