@@ -22,6 +22,8 @@ CLEAN_DATA_RECIPES["C1"] = "-m 20 -q 10 -n 2 -O 20 -a polyA='A{100}' -a polyG='G
 CLEAN_DATA_RECIPES["dropseq"] = "-m 20 -q 5 -n 2 -O 20 -a polyA='A{100}' -a polyT='T{100}'"
 CLEAN_DATA_RECIPES["chromium_single_cell"] = "-g chromium=AAGCAGTGGTATCAACGCAGAGTACATGGG -q 5 -m 20 -n 2 -O 20 -a polyA='A{100}'"
 CLEAN_DATA_RECIPES["smartseq2"] = "-q 5 -m 20 -a smartseq1=AAGCAGTGGTATCA -a smartseq2=AACGCAGAGTGCAGTGC -b smartseq3=AACGCAGAGTGCAGTGC -a smartseq4=CTGTCTCTTATA -a polyA=AAAAAAAA -a polyT=TTTTTTTTTT -b smartseq5=GGTATCAACGCAGA --times 5"
+CLEAN_DATA_RECIPES["insertion_mapping"] = "-q 5 -m 40 -a truseq=AGATCGGAAGAGC -A nextera=CTGTCTCTTATAC --times 2"
+
 
 
 # set actual trimming recipe

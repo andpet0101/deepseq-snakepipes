@@ -73,7 +73,7 @@ rule run_fastqc:
 	shell:
 		"\n\t\t("+module_load("fastqc")+
 		"""
-		fastqc -o fastqc --nogroup -a /group/sequencing/Bfx/scripts/common/dsp/dsp/files/fastqc_adapter.txt {input}) >& {log}
+		fastqc -o fastqc -a /group/sequencing/Bfx/scripts/common/dsp/dsp/files/fastqc_adapter.txt {input}) >& {log}
 		"""
 
 
